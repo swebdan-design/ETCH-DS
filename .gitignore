@@ -1,0 +1,4 @@
+build/
+*.nds
+tools/melonds_harness/harness
+__pycache__/
