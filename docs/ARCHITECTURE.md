@@ -95,7 +95,7 @@ Each screen is a single 16-bit bitmap. All text is drawn into it with two propor
 
 * **Surfaces.** Flat dark surfaces, 1 px borders, 2 px rounded corners.
 * **Spacing.** A 6 px outer margin and 4 px gaps.
-* **Colour.** Small grey captions over white values. One accent (orange) marks what is active, and green marks what CORROSION has just changed.
+* **Colour.** Grayscale throughout: hierarchy comes from brightness alone. Small grey captions sit over white values. White marks what is active, and lit buttons invert to black on white. Accented notes and the kick are white, other hits grey, and steps CORROSION has just changed glow with a fading light wash.
 
 Every hit test uses the same layout constants as the drawing code. Elements redraw only when what they show changes; with flat surfaces, a redraw is just "fill, then draw".
 

@@ -53,8 +53,8 @@ static void draw_column(const pattern_t *p, int s, int play, int g)
 {
     int x = COLX(s), l;
     uint8_t f = p->flags[s], t = f & STEP_TYPE_MASK;
-    uint16_t bg = play ? COL_PLAY : (s & 3) == 0 ? C(5, 5, 6) : COL_SURF, grid;
-    if (g) bg = gfx_mix(bg, C(3, 12, 7), g);
+    uint16_t bg = play ? COL_PLAY : (s & 3) == 0 ? COL_BEAT : COL_SURF, grid;
+    if (g) bg = gfx_mix(bg, COL_GLOW, g);
     grid = gfx_mix(bg, COL_BORDER, 110);
     gfx_rect(fb_top, x, BASS_Y0, 14, BASS_Y1 - BASS_Y0 + 2, bg);
     gfx_hline(fb_top, x, note_y(12), 14, grid);
@@ -62,19 +62,19 @@ static void draw_column(const pattern_t *p, int s, int play, int g)
     gfx_hline(fb_top, x, note_y(36), 14, grid);
     if (t == STEP_NOTE) {
         int y = note_y(p->note[s]);
-        uint16_t c = (f & STEP_ACCENT) ? COL_HOT : COL_ACCENT;
+        uint16_t c = (f & STEP_ACCENT) ? COL_HOT : COL_NOTE;
         if (g) c = gfx_mix(c, COL_EVOLVE, g);
         if (SH->proj.mutes & 1) c = COL_TEXT3;
         gfx_vline(fb_top, x + 7, y + 2, BASS_Y1 - y, gfx_mix(bg, c, 60));
         gfx_rrect(fb_top, x + 1, y - 1, 12, 3, c);
         if (f & STEP_SLIDE) gfx_line(fb_top, x + 12, y, x + 15, note_y(p->note[(s + 1) & 15]), c);
     } else if (t == STEP_TIE) {
-        gfx_rect(fb_top, x, note_y(prev_sounding(p, s)) - 1, 15, 3, gfx_mix(COL_ACCENT, bg, 140));
+        gfx_rect(fb_top, x, note_y(prev_sounding(p, s)) - 1, 15, 3, gfx_mix(COL_NOTE, bg, 140));
     }
     for (l = 0; l < NUM_LANES; l++) {
         int y = LANE_Y0 + l * 7;
         int on = (p->drum[l] >> s) & 1, muted = (SH->proj.mutes >> (l + 1)) & 1;
-        uint16_t c = on ? (muted ? COL_TEXT3 : l == 0 ? COL_ACCENT : COL_TEXT) : (play ? C(10, 8, 7) : COL_SURF2);
+        uint16_t c = on ? (muted ? COL_TEXT3 : l == 0 ? COL_HOT : COL_NOTE) : (play ? COL_SURF3 : COL_SURF2);
         if (g && on) c = gfx_mix(c, COL_EVOLVE, g);
         gfx_rect(fb_top, x, y, 14, 7, COL_SURF);
         gfx_rect(fb_top, x + 1, y, 12, 5, c);
@@ -116,7 +116,7 @@ static void draw_pattern(void)
         int cur = playing ? step : -1;
         if (cur != last_strip) {
             for (s = 0; s < 16; s++)
-                gfx_rect(fb_top, COLX(s) + 1, STRIP_Y, 12, 2, s == cur ? COL_ACCENT : (s & 3) == 0 ? COL_SURF3 : COL_SURF2);
+                gfx_rect(fb_top, COLX(s) + 1, STRIP_Y, 12, 2, s == cur ? COL_TEXT : (s & 3) == 0 ? COL_SURF3 : COL_SURF2);
             last_strip = cur;
         }
     }
@@ -136,7 +136,7 @@ static void draw_header(void)
     head_sig = sig;
     gfx_rect(fb_top, 0, 0, 256, 20, COL_BG);
     x = gfx_text(fb_top, 6, 7, F_MAIN, COL_TEXT, "ETCH");
-    x = gfx_text(fb_top, x + 4, 7, F_MAIN, COL_ACCENT, "DS");
+    x = gfx_text(fb_top, x + 4, 7, F_MAIN, COL_TEXT3, "DS");
     memcpy(b, pr->name, PROJECT_NAME_LEN);
     b[PROJECT_NAME_LEN] = 0;
     for (i = PROJECT_NAME_LEN - 1; i >= 0 && b[i] == ' '; i--) b[i] = 0;
@@ -167,10 +167,10 @@ static void draw_stats(void)
     gfx_rect(fb_top, 0, STAT_Y, 256, 20, COL_BG);
     if (!play) {
         gfx_rrect(fb_top, 6, STAT_Y, 244, 20, COL_SURF);
-        gfx_text_c(fb_top, 128, STAT_Y + 7, F_MAIN, (frames >> 5) & 1 ? COL_ACCENT : COL_ACC_DIM, "PRESS START");
+        gfx_text_c(fb_top, 128, STAT_Y + 7, F_MAIN, (frames >> 5) & 1 ? COL_TEXT : COL_TEXT3, "PRESS START");
         return;
     }
-    stat(0, "MODE", corr_mode_names[pr->gen.mode % EVO_COUNT], pr->gen.mode ? COL_EVOLVE : COL_TEXT);
+    stat(0, "MODE", corr_mode_names[pr->gen.mode % EVO_COUNT], COL_TEXT);
     sprintf(b, "%02d", SH->cur);
     stat(1, SH->fill ? "PATTERN  FILL" : "PATTERN", b, SH->fill ? COL_ACCENT : COL_TEXT);
     sprintf(b, "%03d", pr->pat[SH->cur].gen);
@@ -196,8 +196,8 @@ static void draw_scope(void)
         a = prev < y ? prev : y;
         b = prev < y ? y : prev;
         for (; a <= b; a++) {
-            sbuf[a * 244 + x] = COL_ACCENT;
-            sbuf[(a + 1) * 244 + x] = gfx_mix(sbuf[(a + 1) * 244 + x], COL_ACCENT, 70);
+            sbuf[a * 244 + x] = C(24, 24, 24);
+            sbuf[(a + 1) * 244 + x] = gfx_mix(sbuf[(a + 1) * 244 + x], C(24, 24, 24), 60);
         }
         prev = y;
     }
@@ -222,8 +222,8 @@ static void draw_cpu(void)
     w = (astats.avg_total * 180) / 10000;
     m = (astats.max_total_pct * 180) / 10000;
     if (w > 180) w = 180;
-    if (w > 2) gfx_rrect(fb_top, 24, CPU_Y + 2, w, 5, astats.avg_total > 7000 ? COL_RED : COL_ACCENT);
-    if (m > 1 && m < 180) gfx_vline(fb_top, 24 + m, CPU_Y, 9, COL_TEXT);
+    if (w > 2) gfx_rrect(fb_top, 24, CPU_Y + 2, w, 5, astats.avg_total > 7000 ? COL_TEXT : COL_NOTE);
+    if (m > 1 && m < 180) gfx_vline(fb_top, 24 + m, CPU_Y + 1, 7, COL_TEXT);
     pctf(a, astats.avg_total);
     sprintf(line, "%s%%", a);
     gfx_text_r(fb_top, 250, CPU_Y + 1, F_MAIN, COL_TEXT, line);

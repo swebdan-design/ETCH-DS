@@ -101,8 +101,8 @@ static void live_bass_cell(const pattern_t *p, int s, int play, int cur)
 {
     int x = LX0 + s * LCW;
     uint8_t f = p->flags[s], t = f & STEP_TYPE_MASK;
-    uint16_t bg = play ? COL_PLAY : (s & 3) == 0 ? C(5, 5, 6) : COL_SURF, grid = gfx_mix(bg, COL_BORDER, 110);
-    uint16_t c = (f & STEP_ACCENT) ? COL_HOT : COL_ACCENT;
+    uint16_t bg = play ? COL_PLAY : (s & 3) == 0 ? COL_BEAT : COL_SURF, grid = gfx_mix(bg, COL_BORDER, 110);
+    uint16_t c = (f & STEP_ACCENT) ? COL_HOT : COL_NOTE;
     if (SH->proj.mutes & 1) c = COL_TEXT3;
     gfx_rect(fb_bot, x, BASS_T, 12, BASS_B - BASS_T + 2, bg);
     gfx_hline(fb_bot, x, bass_y(12), 12, grid);
@@ -117,7 +117,7 @@ static void live_bass_cell(const pattern_t *p, int s, int play, int cur)
         int k, n = p->note[s];
         for (k = 1; k < 16; k++)
             if ((p->flags[(s - k) & 15] & STEP_TYPE_MASK) == STEP_NOTE) { n = p->note[(s - k) & 15]; break; }
-        gfx_rect(fb_bot, x, bass_y(n) - 1, LCW, 3, gfx_mix(COL_ACCENT, bg, 140));
+        gfx_rect(fb_bot, x, bass_y(n) - 1, LCW, 3, gfx_mix(COL_NOTE, bg, 140));
     }
     if (cur) gfx_frame(fb_bot, x, BASS_T, 12, BASS_B - BASS_T + 2, COL_ACCENT);
     /* A/S strip: accent = bright bar, slide = ramp */
@@ -130,8 +130,8 @@ static void live_bass_cell(const pattern_t *p, int s, int play, int cur)
 static void live_lane_cell(const pattern_t *p, int l, int s, int play, int cur)
 {
     int x = LX0 + s * LCW, y = LANE_Y(l), on = (p->drum[l] >> s) & 1, muted = (SH->proj.mutes >> (l + 1)) & 1;
-    uint16_t c = on ? (muted ? COL_TEXT3 : l == 0 ? COL_ACCENT : COL_TEXT)
-                    : (play ? C(10, 8, 7) : (s & 3) == 0 ? COL_SURF2 : COL_SURF);
+    uint16_t c = on ? (muted ? COL_TEXT3 : l == 0 ? COL_HOT : COL_NOTE)
+                    : (play ? COL_SURF3 : (s & 3) == 0 ? COL_SURF2 : COL_SURF);
     gfx_rect(fb_bot, x, y, 12, 12, COL_BG);
     gfx_rrect(fb_bot, x, y, 12, 12, c);
     if (cur) gfx_rframe(fb_bot, x, y, 12, 12, on ? COL_BG : COL_ACCENT);
@@ -351,13 +351,13 @@ static void xy_frame(void)
         for (x = XY_X0; x <= XY_X1; x += 24) fb_bot[y * 256 + x] = COL_SURF3;
     for (i = 0; i < 24; i++)
         if (trail_age[i]) gfx_disc(fb_bot, trail_x[i], trail_y[i], 1 + trail_age[i] / 24,
-                                   gfx_mix(COL_SURF, COL_ACCENT, trail_age[i] * 3));
+                                   gfx_mix(COL_SURF, COL_NOTE, trail_age[i] * 3));
     x = XY_X0 + (acid_p.cutoff * (XY_X1 - XY_X0)) / 127;
     y = XY_Y1 - (acid_p.res * (XY_Y1 - XY_Y0)) / 127;
     gfx_hline(fb_bot, XY_X0, y, XY_X1 - XY_X0 + 1, COL_SURF3);
     gfx_vline(fb_bot, x, XY_Y0, XY_Y1 - XY_Y0 + 1, COL_SURF3);
-    gfx_ring(fb_bot, x, y, 7, gfx_mix(COL_SURF, temp ? COL_TEXT : COL_ACCENT, 140));
-    gfx_disc(fb_bot, x, y, 3, temp ? COL_TEXT : COL_ACCENT);
+    gfx_ring(fb_bot, x, y, 7, temp ? COL_TEXT2 : COL_TEXT3);
+    gfx_disc(fb_bot, x, y, 3, COL_TEXT);
     gfx_rect(fb_bot, 6, 175, 110, 9, COL_BG);
     gfx_textf(fb_bot, 6, 176, F_MAIN, COL_TEXT, "%d", acid_p.cutoff);
     gfx_textf(fb_bot, 62, 176, F_MAIN, COL_TEXT, "%d", acid_p.res);
@@ -475,11 +475,10 @@ static void draw_knob(int cx, int cy, int r, int v, int lo, int hi, int sel)
 {
     int pos = hi > lo ? ((v - lo) * 768) / (hi - lo) : 0, a;
     gfx_arc(fb_bot, cx, cy, r, -384, 384, 1, COL_SURF3);
-    if (pos > 0) gfx_arc(fb_bot, cx, cy, r, -384, -384 + pos, 1, sel ? COL_TEXT : COL_ACCENT);
+    if (pos > 0) gfx_arc(fb_bot, cx, cy, r, -384, -384 + pos, 1, sel ? COL_TEXT : COL_NOTE);
     gfx_disc(fb_bot, cx, cy, r - 4, COL_SURF2);
     a = (pos - 384) & 1023;
-    gfx_disc(fb_bot, cx + ((sine_tab[a] * (r - 7)) >> 15), cy - ((sine_tab[(a + 256) & 1023] * (r - 7)) >> 15), 1,
-             sel ? COL_ACCENT : COL_TEXT);
+    gfx_disc(fb_bot, cx + ((sine_tab[a] * (r - 7)) >> 15), cy - ((sine_tab[(a + 256) & 1023] * (r - 7)) >> 15), 1, COL_TEXT);
 }
 
 static void knob_draw(int k)
@@ -620,8 +619,8 @@ static void gen_draw(void)
         gfx_text(fb_bot, GV_X, y + 2, F_MAIN, COL_TEXT, v);
         w = (val * (SL_W - 6)) / gen_max[i];
         gfx_rrect(fb_bot, SL_X0, y + 4, SL_W, 3, COL_SURF2);
-        if (w > 1) gfx_rect(fb_bot, SL_X0 + 1, y + 5, w, 1, COL_ACCENT);
-        gfx_rrect(fb_bot, SL_X0 + w, y + 1, 6, 9, sel ? COL_ACCENT : COL_TEXT);
+        if (w > 1) gfx_rect(fb_bot, SL_X0 + 1, y + 5, w, 1, COL_NOTE);
+        gfx_rrect(fb_bot, SL_X0 + w, y + 1, 6, 9, sel ? COL_TEXT : COL_NOTE);
     }
     /* seed code: tap the upper half of a digit to raise it, the lower half to lower it */
     corr_code_encode(g, code);
@@ -630,7 +629,7 @@ static void gen_draw(void)
     gfx_text(fb_bot, 12, CODE_Y + 13, F_SMALL, COL_TEXT3, "+/-");
     for (i = 0; i < 12; i++) {
         int x = code_x(i), sel = gen_item == GI_CODE && gen_sub == i;
-        gfx_seg7(fb_bot, x, CODE_Y + 5, code[i], 5, i < 4 ? COL_TEXT : COL_ACCENT, COL_SURF2);
+        gfx_seg7(fb_bot, x, CODE_Y + 5, code[i], 5, i < 4 ? COL_TEXT : COL_NOTE, COL_SURF2);
         if (sel) gfx_rect(fb_bot, x, CODE_Y + 20, 9, 1, COL_ACCENT);
     }
     for (i = 0; i < 3; i++) {
@@ -794,7 +793,7 @@ static void kb_draw(void)
         sprintf(b, "%s%d", notes12[n % 12], n / 12 + 1);
         if (b[1] == '-') memmove(b + 1, b + 2, strlen(b + 1));
     } else strcpy(b, "-");
-    stat_block(6, TOP_Y, 58, "NOTE", b, kb_down >= 0 ? COL_ACCENT : COL_TEXT3);
+    stat_block(6, TOP_Y, 58, "NOTE", b, kb_down >= 0 ? COL_TEXT : COL_TEXT3);
     sprintf(b, "%s %s", notes12[SH->proj.gen.key % 12], corr_scale_names[SH->proj.gen.scale % SCALE_COUNT]);
     if (b[1] == '-') memmove(b + 1, b + 2, strlen(b + 1));
     stat_block(68, TOP_Y, 86, "SCALE", b, COL_TEXT);
@@ -802,15 +801,16 @@ static void kb_draw(void)
     stat_block(158, TOP_Y, 42, "OCTAVE", b, COL_TEXT);
     if (kb_rec) sprintf(b, "%02d", (SH->playing ? SH->step : kb_rec_step) + 1);
     else strcpy(b, "OFF");
-    stat_block(204, TOP_Y, 46, "REC STEP", b, kb_rec ? COL_RED : COL_TEXT3);
+    stat_block(204, TOP_Y, 46, "REC STEP", b, kb_rec ? COL_TEXT : COL_TEXT3);
     for (i = 0; i < kb_n; i++) {
         int x = x0 + i * w, root = (kb_note[i] % 12) == SH->proj.gen.key % 12;
         int down = i == kb_down, cur = kb_row == 0 && i == kb_cur;
         const char *nm = notes12[kb_note[i] % 12];
         char lab[3] = { nm[0], nm[1] == '#' ? '#' : 0, 0 };
-        gfx_rrect(fb_bot, x, KB_Y0, w - 2, KB_Y1 - KB_Y0, down ? (kb_acc ? COL_HOT : COL_ACCENT) : root ? COL_SURF3 : COL_SURF2);
+        gfx_rrect(fb_bot, x, KB_Y0, w - 2, KB_Y1 - KB_Y0, down ? COL_TEXT : root ? COL_SURF3 : COL_SURF2);
         if (cur) gfx_rframe(fb_bot, x, KB_Y0, w - 2, KB_Y1 - KB_Y0, down ? COL_TEXT : COL_ACCENT);
-        if (root) gfx_disc(fb_bot, x + (w - 2) / 2, KB_Y1 - 22, 1, down ? COL_BG : COL_ACCENT);
+        if (root) gfx_disc(fb_bot, x + (w - 2) / 2, KB_Y1 - 22, 1, down ? COL_BG : COL_TEXT);
+        if (down && kb_acc) gfx_rect(fb_bot, x + 3, KB_Y0 + 4, w - 8, 2, COL_BG);
         if (w >= 12) gfx_text_c(fb_bot, x + (w - 2) / 2, KB_Y1 - 12, F_SMALL, down ? COL_BG : root ? COL_TEXT : COL_TEXT2, lab);
     }
     for (i = 0; i < 5; i++) {
@@ -903,7 +903,7 @@ static void sg_draw(void)
         gfx_text_c(fb_bot, x + CELL_W / 2, y + 3, F_MAIN, now ? COL_BG : empty ? COL_TEXT3 : COL_TEXT, b);
     }
     gfx_text(fb_bot, 6, CHAIN_Y0 - 9, F_SMALL, COL_TEXT2, "CHAIN");
-    gfx_text(fb_bot, 34, CHAIN_Y0 - 9, F_SMALL, ch->song ? COL_EVOLVE : COL_TEXT3, ch->song ? "SONG ON" : "SONG OFF");
+    gfx_text(fb_bot, 34, CHAIN_Y0 - 9, F_SMALL, ch->song ? COL_TEXT : COL_TEXT3, ch->song ? "SONG ON" : "SONG OFF");
     sprintf(b, "BAR %d/%d", SH->chain_bar + 1, ch->rep[SH->chain_pos & 15]);
     if (ch->song) gfx_text_r(fb_bot, 250, CHAIN_Y0 - 9, F_SMALL, COL_TEXT3, b);
     for (i = 0; i < CHAIN_LEN; i++) {
@@ -1080,7 +1080,7 @@ static void fl_draw(void)
             int k;
             for (k = PROJECT_NAME_LEN - 1; k >= 0 && (fl_names[i][k] == ' ' || !fl_names[i][k]); k--) fl_names[i][k] = 0;
             gfx_text(fb_bot, x + 20, y + 3, F_MAIN, COL_TEXT, fl_names[i]);
-            if (i == fl_last) gfx_disc(fb_bot, x + FL_W - 7, y + 6, 1, COL_EVOLVE);
+            if (i == fl_last) gfx_disc(fb_bot, x + FL_W - 7, y + 6, 1, COL_TEXT);
         } else gfx_text(fb_bot, x + 20, y + 4, F_SMALL, fl_status[i] == SLOT_BAD ? COL_RED : COL_TEXT3,
                         fl_status[i] == SLOT_BAD ? "DAMAGED" : "EMPTY");
     }

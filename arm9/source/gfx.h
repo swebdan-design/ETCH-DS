@@ -5,8 +5,10 @@
  * label sits exactly where the layout puts it (no 8x8 character grid).
  *
  * Design system: flat dark surfaces, 1 px borders, 2 px rounded corners,
- * 6 px outer margin, 4 px gaps.  Small grey captions over white values; one
- * accent (orange) for what is active, green for what CORROSION just changed.
+* 6 px outer margin, 4 px gaps.  Small grey captions over white values;
+ * grayscale throughout: hierarchy by brightness alone; white is what is
+ * active (lit buttons invert to white on black), and steps CORROSION just
+ * changed glow with a fading light wash.
  */
 #ifndef ETCH_DS_GFX_H
 #define ETCH_DS_GFX_H
@@ -15,21 +17,24 @@
 
 #define C(r, g, b) ((uint16_t)(RGB15(r, g, b) | BIT(15)))
 
-#define COL_BG      C(2, 2, 3)      /* screen                  */
-#define COL_SURF    C(4, 4, 5)      /* panels                  */
-#define COL_SURF2   C(6, 6, 7)      /* controls, raised cells  */
-#define COL_SURF3   C(9, 9, 10)     /* hover / beat columns    */
-#define COL_BORDER  C(8, 8, 9)
-#define COL_TEXT    C(29, 29, 28)   /* values                  */
-#define COL_TEXT2   C(17, 17, 17)   /* captions                */
-#define COL_TEXT3   C(11, 11, 12)   /* disabled / hints        */
-#define COL_ACCENT  C(31, 14, 3)    /* orange                  */
-#define COL_ACC_DIM C(11, 5, 2)
-#define COL_ACC_LO  C(6, 3, 1)
-#define COL_HOT     C(31, 27, 20)   /* accented notes          */
-#define COL_EVOLVE  C(8, 28, 16)    /* CORROSION's changes     */
-#define COL_RED     C(29, 6, 4)
-#define COL_PLAY    C(8, 6, 5)      /* playhead column         */
+#define COL_BG      C(1, 1, 1)      /* screen                  */
+#define COL_SURF    C(3, 3, 3)      /* panels                  */
+#define COL_SURF2   C(5, 5, 5)      /* controls, raised cells  */
+#define COL_SURF3   C(8, 8, 8)      /* beat columns, tracks    */
+#define COL_BORDER  C(7, 7, 7)
+#define COL_TEXT    C(29, 29, 29)   /* values                  */
+#define COL_TEXT2   C(15, 15, 15)   /* captions                */
+#define COL_TEXT3   C(9, 9, 9)      /* disabled / hints        */
+#define COL_ACCENT  C(31, 31, 31)   /* active: white           */
+#define COL_ACC_DIM C(13, 13, 13)
+#define COL_ACC_LO  C(6, 6, 6)
+#define COL_NOTE    C(19, 19, 19)   /* notes and hits          */
+#define COL_HOT     C(31, 31, 31)   /* accented notes, kick    */
+#define COL_EVOLVE  C(31, 31, 31)   /* CORROSION's changes     */
+#define COL_GLOW    C(13, 13, 13)   /* evolved column wash     */
+#define COL_RED     C(31, 31, 31)   /* warnings (by inversion) */
+#define COL_PLAY    C(7, 7, 7)      /* playhead column         */
+#define COL_BEAT    C(4, 4, 4)      /* every 4th step          */
 
 enum { F_SMALL, F_MAIN };           /* 5 px caps, 7 px caps    */
 
