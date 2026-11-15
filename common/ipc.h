@@ -81,8 +81,21 @@ enum {
     CMD_EDITED,       /* arg = pattern (0xFF = all): new edit epoch           */
     CMD_EVO_DROP,     /* the prepared candidate targets the wrong pattern     */
     CMD_UNDO,
-    CMD_STRESS        /* arg = 1: CPU test, every step fires ACID + 6 lanes   */
+    CMD_STRESS,       /* arg = 1: CPU test, every step fires ACID + 6 lanes   */
+    /* pattern edits: the ARM7 is the only writer of pattern memory while it
+     * plays, so edits compose with CORROSION commits instead of racing them */
+    CMD_SET_BASS,     /* arg = pat<<15 | step<<11 | note<<5 | flags(5 bits)   */
+    CMD_SET_DRUM,     /* arg = pat<<7 | lane<<5 | step<<1 | on                */
+    CMD_REPLACE,      /* arg = pat | undo<<8: copy edit_pat in (GEN, REGEN)   */
+    CMD_FILL,         /* arg = FILL_*; masks in fill_req                      */
+    CMD_EVOLVE,       /* evolve at the next bar line (ETCH's SELECT+A)        */
+    CMD_MUTES         /* arg = mutes byte (bit0 bass, bit1..4 lanes)          */
 };
+enum { FILL_ONESHOT, FILL_LATCH_ON, FILL_LATCH_OFF, FILL_UPDATE };
+#define CMD_BASS_ARG(pat, step, note, flags) \
+    (((uint32_t)(pat) << 15) | ((uint32_t)(step) << 11) | ((uint32_t)(note) << 5) | ((uint32_t)(flags) & 31u))
+#define CMD_DRUM_ARG(pat, lane, step, on) \
+    (((uint32_t)(pat) << 7) | ((uint32_t)(lane) << 5) | ((uint32_t)(step) << 1) | ((on) ? 1u : 0u))
 #define CMD(c, arg) (((uint32_t)(c) << 24) | ((uint32_t)(arg) & 0xFFFFFFu))
 
 /* ---- the shared block ------------------------------------------------------ */
@@ -107,6 +120,11 @@ typedef struct {
     volatile uint8_t evo_commits, evo_undo_pat, evo_stale_drops, pad0;
     volatile uint8_t pat_epoch[NUM_PATTERNS];
     pattern_t evo_cand;
+    /* whole-pattern edits (GEN, REGEN): the ARM9 writes edit_pat, sends
+     * CMD_REPLACE and waits for edit_ack to move before reusing it */
+    pattern_t edit_pat;
+    volatile uint32_t edit_ack;
+    uint16_t fill_req[NUM_LANES];
     pattern_t evo_undo;
 
     /* audio stream bookkeeping */

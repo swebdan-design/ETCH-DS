@@ -64,7 +64,13 @@ The audio ring (2 × 512 int16) is also in main RAM. The ARM9 writes it through 
 3. At the gate point of step 16, the ARM7 commits the candidate if the target and epoch still match. The new material starts on the downbeat.
 4. A candidate that targets the wrong pattern is dropped (`CMD_EVO_DROP`). One computed before an edit carries a stale epoch and is refused.
 
-**Rule for milestone 2 (editing).** The ARM9 writes pattern memory directly, then sends `CMD_EDITED`. In the microseconds between the write and the command, the ARM7 could still commit a stale candidate over the edit. This window is about one phrase boundary wide, and edits are human-rate. The robust fix is to route step edits through ARM7 commands, which makes the ARM7 the only writer of the playing pattern. This is noted in `docs/IDEAS.md` and is not needed in milestone 1, which has no pattern editing.
+**Editing.** Pattern memory is written only by the ARM7. The GUI sends edits as commands:
+
+* `CMD_SET_BASS` (note and flags of one step) and `CMD_SET_DRUM` (one hit).
+* `CMD_REPLACE` for whole-pattern operations such as GEN and REGEN. The ARM9 writes the new pattern into `edit_pat` and waits for `edit_ack` before reusing that buffer.
+* `CMD_FILL` (one-shot, latch on/off, fresh masks each bar), `CMD_EVOLVE` and `CMD_MUTES`.
+
+Every edit moves the pattern's edit epoch, so a CORROSION candidate prepared before the edit is refused instead of overwriting it. Edits and commits therefore compose with no race. The host test checks this.
 
 ## 4. The sound engine (ARM9)
 
@@ -79,7 +85,20 @@ Everything on the audio path is integer arithmetic. `tools/check_audio_path.py` 
 
 Formats: oscillator phase is 32 bits per cycle; ACID's signal is Q14 and the ladder states provably stay within ±1.0; the mix bus is int32 at Q15 scale; coefficients are Q16; pitch is in 1/64 semitone. `tools/gen_tables.py` generates every table (wavetables, exponentials, coefficients, reciprocals) into `arm9/source/dsp_tables.c`, which is committed so `make` needs no Python.
 
-## 5. Memory map (milestone 1)
+## 5. The GUI
+
+Each screen has two layers. A 16-bit bitmap (BG3) holds the art and graphics, and a text console (BG0) holds the labels. The labels use ETCH DS's own squared 5×7 font with a stamped shadow (`tools/gen_font.py`). Static art is painted once per screen or tab and kept in RAM: brushed-steel plates, bevels, rivets, hazard bands, rust, recessed displays. Dynamic parts redraw only when what they show changes, restoring their patch of plate first. That covers pattern columns, LEDs, the scope, knobs, faders and 7-segment readouts.
+
+Files:
+
+* `gfx.c`: primitives and industrial surfaces
+* `scr_top.c`: the top screen
+* `ui.c`: the tabs and the input grammar
+* `edit.c`: the editing actions
+
+The GUI runs in the main loop. It cannot delay audio, and a 2-minute melonDS run with all tabs in use had 0 dropouts.
+
+## 6. Memory map (milestone 1)
 
 | | Size | Notes |
 |---|---|---|
@@ -91,7 +110,7 @@ Formats: oscillator phase is 32 bits per cycle; ACID's signal is Q14 and the lad
 | ARM7 | 14 KB code, 3 KB data | |
 | ROM | 185 KB | |
 
-## 6. Files
+## 7. Files
 
 ```
 Makefile, Makefile.arm7, Makefile.arm9   one `make` (BlocksDS rom_arm9arm7 template)

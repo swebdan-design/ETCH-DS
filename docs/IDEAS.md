@@ -6,7 +6,6 @@ Milestone 1 only proves the sound. These ideas came up while building it. None o
 
 ## Engine
 
-* **Route pattern edits through the ARM7.** When LIVE/KEYS editing arrives, send step edits as ARM7 commands, so the ARM7 is the only writer of the playing pattern. This closes the (tiny) window where a commit could overwrite a direct ARM9 edit. See ARCHITECTURE §3.
 * **ACID LFO.** ETCH's LFO (PITCH/CUT/RES, four shapes) is not ported yet. It fits naturally as a patch-panel source.
 * **Retune FOUNDRY with longer drift.** Lanes are retuned by varispeed, which also changes decay length. That is fine for ±2 semitones of drift. Larger re-tunes should re-render the sample, double-buffered and swapped at a block boundary.
 * **Filter quality options.** The ladder runs 2× oversampled. The CPU headroom measured in milestone 1 (see the report) would allow 4× on DSi, or a zero-delay-feedback ladder, which tunes more accurately at high cutoff.
@@ -30,6 +29,7 @@ Milestone 1 only proves the sound. These ideas came up while building it. None o
 
 ## UI
 
-* **XY pad.** Label the axes on the bottom screen, show a trail, and record motion.
-* **Oscilloscope** on the top screen, fed from the last rendered block. That block is already in the audio ring.
-* **Evolved steps** glowing and fading on the top screen; the commit counter and `pattern_t.gen` are already there.
+* **Tabs still to build.** KEYS (two octaves, in-scale, with an accent/slide strip) needs a live-note path from the ARM9 to the voice. SONG/FILE needs the chain and saves. PANEL needs its patch cables.
+* **XY motion recording** (the trail already exists).
+* **Step probability and conditions** in LIVE. ETCH edits them on its TRACK screen.
+* **Locks** (step, lane, bass, pattern) shown and settable in LIVE and GEN.

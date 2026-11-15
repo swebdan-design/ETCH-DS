@@ -20,13 +20,33 @@ uint16_t evo_random(void);
 uint8_t  evo_service(void);
 uint8_t  evo_frame(void);
 void     anchors_forget(uint8_t pat);
+uint8_t  evo_mutate_now(uint8_t pat, pattern_t *out);
+
+/* edit.c: every pattern change goes through the ARM7 */
+void     app_set_bass(uint8_t step, uint8_t note, uint8_t flags);
+void     app_toggle_drum(uint8_t lane, uint8_t step);
+void     app_replace(const pattern_t *p, uint8_t undo);
+void     app_generate(uint8_t what);
+uint16_t app_regen(uint8_t what);
+void     app_fill(void);
+void     app_fill_latch(uint8_t on);
+void     app_fill_frame(void);
+void     app_evolve(void);
+void     app_undo(void);
+void     app_toggle_mute(uint8_t bit);
+
+/* main.c: the last audio the ARM9 rendered (for the scope) */
+uint32_t audio_scope(int16_t *out, uint32_t n);
 
 /* demo.c */
 #define DEMO_CODE "0F1C90095870"      /* ETCH demo song 1, CORRODE: 0F1C-9009-5870 */
 void demo_load(project_t *p);        /* portable: also used by the host tests */
 void demo_import_sound(const project_t *p);
 
-/* ui.c */
+/* ui.c (bottom screen) and scr_top.c */
 void ui_init(void);
 void ui_frame(uint32_t keys_down, uint32_t keys_held);
+void top_init(void);
+void top_frame(void);
+extern uint8_t ui_stress;
 #endif

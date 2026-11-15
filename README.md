@@ -13,20 +13,39 @@ This is **milestone 1, "It squelches"**. It proves the sound before any interfac
 * **Sequencer** on the ARM7: ETCH's step rules and ETCH II's fixed swing clock, sample-accurate on a 32-sample grid.
 * **XY pad** on the bottom screen: X = cutoff, Y = resonance.
 
+![ETCH DS: LIVE, XY, PANEL and GEN](docs/images/screens.png)
+
 The milestone report is [`docs/MILESTONE1_REPORT.md`](docs/MILESTONE1_REPORT.md), the design is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and parked ideas are in [`docs/IDEAS.md`](docs/IDEAS.md).
 
-## Controls (milestone 1)
+## The screens
+
+**Top (always):** the machine's face plate. It shows the song, the seed code and an amber 7-segment tempo. The pattern sits in a recessed display: the bass line as pitch, plus ETCH's four drum lanes. Steps that CORROSION has just changed glow acid green and fade. Below the pattern are a row of step LEDs, the mode, the generation and the bars until the next evolution, an oscilloscope, and the per-stage CPU meter.
+
+**Bottom tabs:**
+
+| Tab | What it does |
+|---|---|
+| LIVE | The pattern, editable. Drag a bass step to set its pitch; tap the note to rest it. Tap the A/S strip under a step to cycle accent and slide. Tap or swipe drum cells. Tap a row name to mute it. The pads are FILL, REGEN, EVOLVE and UNDO. |
+| XY | X sets cutoff and Y sets resonance, with a fading trail and 7-segment readouts. |
+| PANEL | Knobs for ACID (wave, cutoff, resonance, env mod, decay, accent, slide, drive, drive amount, filter mode, level), BPM, FX drive, delay, comb, and CPU TEST. Patch cables come later. |
+| GEN | CORROSION's settings on faders, the seed code on a 7-segment pad (tap above or below a digit), GEN ALL / GEN BASS / DRUMS, and the mutation dial. |
+
+## Controls
 
 | | |
 |---|---|
 | START | play / stop (the moment you press it seeds the living song) |
-| UP / DOWN | choose a row on the top screen |
-| A + LEFT / RIGHT | change the row by 1 |
-| A + UP / DOWN | change the row by 8 |
-| touch (bottom) | XY pad: X = cutoff, Y = resonance |
+| SELECT + LEFT / RIGHT | previous / next tab (or tap the tab bar) |
+| D-pad | move the cursor on the current tab |
+| A | place or toggle (on LIVE: a note, a hit, a mute, a pad) |
+| A + D-pad | change the value under the cursor (LIVE bass: UP/DOWN steps the pitch in the scale, RIGHT toggles accent, LEFT toggles slide) |
+| B + A | delete |
+| SELECT + A | evolve at the next bar |
+| SELECT + B | undo the last generation |
+| hold R | latched fill: a fresh variation every bar until you let go |
 | hold L while dragging | temporary move: it springs back when you let go |
 
-The rows are WAVE, CUTOFF, RES, ENV MOD, DECAY, ACCENT, SLIDE, DRIVE, DRV AMT, FILTER (303 / KEY), EVO (STABLE / DRIFT / CORRODE), BPM, FX (on/off) and CPU TEST. CPU TEST fires ACID and all six drum lanes on every 16th with every FX stage working. The bottom of the top screen shows the CPU meter, per stage.
+Touch is single-point everywhere, and it is never needed for sound.
 
 ## Building
 

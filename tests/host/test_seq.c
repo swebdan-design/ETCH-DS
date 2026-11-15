@@ -292,6 +292,71 @@ static void test_stop_stress(void)
     CHECK(!sh.playing, "stopped");
 }
 
+/* 9. GUI edits go through the ARM7: step fields, drum hits, whole-pattern
+ *    replace with undo, fills, evolve request, mutes; each edit moves the
+ *    edit epoch so a stale CORROSION candidate cannot overwrite it */
+static void test_edit_commands(void)
+{
+    pattern_t *p, orig, rep;
+    int k, offs;
+    setup(130, 0);
+    p = &sh.proj.pat[0];
+    seq_command(CMD(CMD_SET_BASS, CMD_BASS_ARG(0, 5, 33, STEP_NOTE | STEP_ACCENT)));
+    CHECK(p->note[5] == 33 && p->flags[5] == (STEP_NOTE | STEP_ACCENT), "set bass step");
+    CHECK(sh.pat_epoch[0] == 1, "bass edit moves the epoch");
+    seq_command(CMD(CMD_SET_DRUM, CMD_DRUM_ARG(0, 2, 9, 1)));
+    CHECK(p->drum[2] == (1u << 9), "drum on");
+    seq_command(CMD(CMD_SET_DRUM, CMD_DRUM_ARG(0, 2, 9, 0)));
+    CHECK(p->drum[2] == 0, "drum off");
+    CHECK(sh.pat_epoch[0] == 3, "every edit moves the epoch");
+
+    orig = *p;
+    memset(&rep, 0, sizeof rep);
+    rep.drum[0] = 0x1111; rep.gen = 42;
+    sh.edit_pat = rep;
+    seq_command(CMD(CMD_REPLACE, 0 | 0x100));
+    CHECK(!memcmp(p, &rep, sizeof rep), "replace");
+    CHECK(sh.edit_ack == 1, "replace acknowledged");
+    seq_command(CMD(CMD_UNDO, 0));
+    CHECK(!memcmp(p, &orig, sizeof orig), "replace is undoable");
+
+    /* a stale candidate after an edit is refused */
+    sh.evo_cand = rep; sh.evo_target = 0; sh.evo_epoch = (uint8_t)(sh.pat_epoch[0] - 1); sh.evo_state = EVO_READY;
+    sh.proj.gen.mode = EVO_CORRODE;
+    seq_command(CMD(CMD_START, 1));
+    run_blocks((uint32_t)(FS_HZ * 5 / AUDIO_BLOCK));
+    CHECK(sh.evo_commits == 0 && sh.evo_stale_drops == 1, "edited pattern not overwritten");
+
+    /* one-shot fill: drums follow the fill masks until the bar line */
+    setup(130, 0);
+    sh.proj.pat[0].drum[0] = 0x0001;
+    sh.fill_req[0] = 0xFFFF;
+    seq_command(CMD(CMD_START, 1));
+    run_blocks(4);
+    seq_command(CMD(CMD_FILL, FILL_ONESHOT));
+    CHECK(sh.fill == 1, "fill on");
+    run_blocks((uint32_t)(FS_HZ * 4 / AUDIO_BLOCK));
+    CHECK(sh.fill == 0, "one-shot fill ends at the bar line");
+    seq_command(CMD(CMD_FILL, FILL_LATCH_ON));
+    run_blocks((uint32_t)(FS_HZ * 4 / AUDIO_BLOCK));
+    CHECK(sh.fill == 1 && sh.fill_hold == 1, "latched fill holds");
+    seq_command(CMD(CMD_FILL, FILL_LATCH_OFF));
+    CHECK(sh.fill == 0, "latch off");
+
+    seq_command(CMD(CMD_EVOLVE, 0));
+    CHECK(sh.evo_request == 1, "evolve requested");
+    seq_command(CMD(CMD_MUTES, 0x03));
+    nlog = 0;
+    sh.proj.pat[0].flags[0] = STEP_NOTE;
+    run_blocks((uint32_t)(FS_HZ * 4 / AUDIO_BLOCK));
+    offs = 0;
+    for (k = 0; k < nlog; k++) {
+        if (evlog[k].e.type == EV_NOTE) offs++;
+        if (evlog[k].e.type == EV_DRUMS && (evlog[k].e.a & 1)) offs += 100;
+    }
+    CHECK(offs == 0, "muted bass and kick stay silent (%d)", offs);
+}
+
 int main(void)
 {
     test_tempo();
@@ -302,6 +367,7 @@ int main(void)
     test_commit();
     test_commit_timing();
     test_stop_stress();
+    test_edit_commands();
     printf("test_seq: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;
 }

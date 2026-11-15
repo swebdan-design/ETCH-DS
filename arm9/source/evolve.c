@@ -125,6 +125,18 @@ uint8_t evo_service(void)
     return 1;
 }
 
+/* evolve immediately (stopped): mutate pattern pat into out */
+uint8_t evo_mutate_now(uint8_t pat, pattern_t *out)
+{
+    uint8_t mode = SH->proj.gen.mode;
+    if (SH->proj.pat[pat].lock & PLOCK_ALL) return 0;
+    memcpy(&evo_src, &SH->proj.pat[pat], sizeof(pattern_t));
+    corr_mutate(out, &evo_src, anchor_for(pat, &evo_src), &SH->proj.gen,
+                mode == EVO_STABLE ? EVO_DRIFT : mode, SH->proj.gen.mutation,
+                (uint16_t)(evo_random() + (++evo_ctr)));
+    return 1;
+}
+
 /* once per frame: react to commits (sound drift), reset drift in STABLE */
 uint8_t evo_frame(void)
 {

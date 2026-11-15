@@ -70,6 +70,27 @@ static void render_irq(void)
     }
 }
 
+/* The newest rendered audio for the oscilloscope: the three most recent
+ * blocks are stable (the fourth slot is the next to be written).  Looks for a
+ * rising zero crossing in the first block so the trace stands still. */
+uint32_t audio_scope(int16_t *out, uint32_t n)
+{
+    uint32_t r = rendered, start, i, trig = 0;
+    int16_t mono[3 * AUDIO_BLOCK];
+    if (r < 3) return 0;
+    start = r - 3;
+    for (i = 0; i < 3 * AUDIO_BLOCK; i++) {
+        uint32_t b = start + i / AUDIO_BLOCK, slot = b & (AUDIO_NBLK - 1);
+        uint32_t k = slot * AUDIO_BLOCK + (i % AUDIO_BLOCK);
+        mono[i] = (int16_t)((ring_l[k] + ring_r[k]) >> 1);
+    }
+    for (i = 1; i < AUDIO_BLOCK; i++)
+        if (mono[i - 1] < 0 && mono[i] >= 0) { trig = i; break; }
+    if (n > 3 * AUDIO_BLOCK - trig) n = 3 * AUDIO_BLOCK - trig;
+    for (i = 0; i < n; i++) out[i] = mono[trig + i];
+    return n;
+}
+
 static void shared_init(void)
 {
     /* the block is only ever touched through the uncached mirror: write back
@@ -99,6 +120,7 @@ int main(int argc, char **argv)
     foundry_build();
     shared_init();
     ui_init();
+    top_init();
 
     irqSet(IRQ_IPC_SYNC, render_irq);
     REG_IPC_SYNC = IPC_SYNC_IRQ_ENABLE;
@@ -126,7 +148,9 @@ int main(int argc, char **argv)
             }
         }
         evo_frame();
+        app_fill_frame();
         ui_frame(down, held);
+        top_frame();
     }
     return 0;
 }

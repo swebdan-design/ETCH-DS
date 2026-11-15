@@ -186,13 +186,15 @@ def main():
     script = ["30:SHOT", "90:START:3", "300:SHOT"]
     dumps = list(range(120, a.frames, 120))
     if a.touch:
-        script += ["399:DUMP", "400:TOUCH:40,40,30", "429:DUMP", "430:SHOT", "460:TOUCH:220,160,60",
-                   "519:DUMP", "520:SHOT", "560:L:80", "570:TOUCH:128,20,40", "605:DUMP", "606:SHOT",
+        # XY tab, then: tap, drag, and an L-held (temporary) drag
+        script += ["380:TOUCH:96,10,3", "399:DUMP", "400:TOUCH:40,40,30", "429:DUMP", "430:SHOT", "460:TOUCH:220,160,60",
+                   "519:DUMP", "520:SHOT", "560:L:80", "570:TOUCH:128,40,40", "605:DUMP", "606:SHOT",
                    "640:DUMP", "641:SHOT"]
     if a.stress:
         t = a.frames // 2
-        script += ["%d:DOWN:2" % (t + 4 * i) for i in range(13)]
-        script += ["%d:A:20" % (t + 60), "%d:RIGHT:2" % (t + 70), "%d:SHOT" % (t + 300)]
+        # PANEL tab, tap the CPU TEST knob (a tap steps a choice), back to LIVE
+        script += ["%d:TOUCH:160,10,3" % t, "%d:TOUCH:224,172,3" % (t + 20),
+                   "%d:TOUCH:32,10,3" % (t + 60), "%d:SHOT" % (t + 300)]
     script += ["%d:DUMP" % d for d in dumps]
     script.append("%d:SHOT" % (a.frames - 1))
     mem, wav, log = run(a, ";".join(script), a.name, a.frames)

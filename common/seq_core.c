@@ -342,6 +342,12 @@ void seq_render_block(uint32_t blk)
 }
 
 /* ---- commands from the ARM9 (run with the block interrupt masked) -------- */
+static void edited(uint8_t pat)
+{
+    if (pat < NUM_PATTERNS) S->pat_epoch[pat]++;
+    S->evo_state = EVO_IDLE;           /* recompute from the edited pattern */
+}
+
 static void start(uint16_t seed)
 {
     live_rng = seed ? seed : 0x5EED;
@@ -403,6 +409,49 @@ void seq_command(uint32_t v)
         break;
     case CMD_STRESS:
         S->stress = (uint8_t)(arg != 0);
+        break;
+    case CMD_SET_BASS: {
+        uint32_t pat = (arg >> 15) & 31, st = (arg >> 11) & 15;
+        pattern_t *p = &S->proj.pat[pat];
+        p->note[st] = (uint8_t)((arg >> 5) & 63);
+        p->flags[st] = (uint8_t)(arg & 31);
+        edited((uint8_t)pat);
+        break; }
+    case CMD_SET_DRUM: {
+        uint32_t pat = (arg >> 7) & 31, lane = (arg >> 5) & 3, st = (arg >> 1) & 15;
+        pattern_t *p = &S->proj.pat[pat];
+        if (arg & 1) p->drum[lane] |= (uint16_t)(1u << st);
+        else p->drum[lane] &= (uint16_t)~(1u << st);
+        edited((uint8_t)pat);
+        break; }
+    case CMD_REPLACE: {
+        uint8_t pat = (uint8_t)(arg & 31);
+        if (arg & 0x100) {
+            memcpy(&S->evo_undo, &S->proj.pat[pat], sizeof(pattern_t));
+            S->evo_undo_pat = pat;
+        }
+        memcpy(&S->proj.pat[pat], &S->edit_pat, sizeof(pattern_t));
+        edited(pat);
+        S->edit_ack++;
+        break; }
+    case CMD_FILL:
+        if (arg == FILL_LATCH_OFF) {
+            S->fill_hold = 0; S->fill = 0; fill_bars = 0;
+            break;
+        }
+        memcpy(S->fill_mask, S->fill_req, sizeof S->fill_mask);
+        if (arg == FILL_LATCH_ON) { S->fill_hold = 1; S->fill = 1; fill_bars = 1; }
+        else if (arg == FILL_ONESHOT) {
+            /* a fill asked for late in the bar runs through the next bar too */
+            fill_bars = (S->playing && S->step >= 12) ? 2 : 1;
+            S->fill = 1;
+        }
+        break;
+    case CMD_EVOLVE:
+        if (!(S->proj.pat[seq_next_bar_pattern()].lock & PLOCK_ALL)) S->evo_request = 1;
+        break;
+    case CMD_MUTES:
+        S->proj.mutes = (uint8_t)arg;
         break;
     default:
         break;
