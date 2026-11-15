@@ -49,6 +49,17 @@ static void button(int x, int y, int w, int h, const char *label, int lit, int s
     gfx_text_c(fb_bot, x + w / 2, y + (h - 7) / 2, F_MAIN, lit ? COL_BG : COL_TEXT, label);
 }
 
+/* Knob drags: the whole range fits in about 90 px of travel, and dragging
+ * up or to the right both turn it up.  Choices step every 10 px. */
+#define DRAG_SPAN 90
+static int drag_value(int start, int lo, int hi, int is_enum)
+{
+    int d = (t_sy - t_y) + (t_x - t_sx), v;
+    if (is_enum) v = start + d / 10;
+    else v = start + (d * (hi - lo) + (d >= 0 ? DRAG_SPAN / 2 : -DRAG_SPAN / 2)) / DRAG_SPAN;
+    return clampi(v, lo, hi);
+}
+
 /* caption over value, as on the top screen */
 static void stat_block(int x, int y, int w, const char *cap, const char *val, uint16_t vc)
 {
@@ -91,7 +102,8 @@ static uint32_t lv_sig[5][16], lv_label_sig, lv_pad_sig[4];
 static uint8_t pad_flash[4];
 static int8_t t_step, t_lane, t_paint;
 static uint8_t t_kind;              /* 1 bass, 2 strip, 3 lane, 4 pad, 5 label */
-static uint8_t t_start_note, t_start_flags;
+static uint8_t t_start_note, t_start_flags, t_placed, t_changed;
+#define BASS_STEP_PX 6                  /* one scale step per 6 px of drag */
 
 static const char * const lane_names[4] = { "KICK", "SNARE", "HAT", "OPEN" };
 static const char * const pad_names[4] = { "FILL", "REGEN", "EVOLVE", "UNDO" };
@@ -156,7 +168,7 @@ static void live_draw_static(void)
 static void live_labels(void)
 {
     int l, sel = lv_col < 0;
-    gfx_rect(fb_bot, 0, TOP_Y, LX0 - 2, PAD_Y - TOP_Y - 4, COL_BG);
+    gfx_rect(fb_bot, 0, BASS_T + 18, LX0 - 2, PAD_Y - BASS_T - 22, COL_BG);   /* below the note readout */
     gfx_text(fb_bot, 6, BASS_T + 21, F_SMALL, (SH->proj.mutes & 1) ? COL_TEXT3 : (sel && lv_row == 0) ? COL_ACCENT : COL_TEXT2, "BASS");
     if (SH->proj.mutes & 1) gfx_text(fb_bot, 6, BASS_T + 29, F_SMALL, COL_RED, "MUTE");
     gfx_text(fb_bot, 6, STRIP_Y, F_SMALL, COL_TEXT3, "A/S");
@@ -172,6 +184,25 @@ static void live_frame(void)
     const pattern_t *p = &SH->proj.pat[SH->cur];
     int s, l, step = SH->step, playing = SH->playing;
     uint32_t lsig = SH->proj.mutes | ((uint32_t)(lv_col < 0) << 8) | ((uint32_t)lv_row << 9);
+    {   /* the edited bass note, large, beside the lane */
+        uint8_t f0 = lv_col >= 0 ? p->flags[lv_col] : 0;
+        uint32_t ns = lsig | ((uint32_t)(lv_row == 0 && lv_col >= 0) << 16) |
+                      (lv_col >= 0 ? ((uint32_t)p->note[lv_col] << 17) | ((uint32_t)(f0 & 3) << 24) | ((uint32_t)lv_col << 26) : 0);
+        static uint32_t note_sig = 0xFFFFFFFF;
+        if (ns != note_sig || lsig != lv_label_sig) {
+            gfx_rect(fb_bot, 0, BASS_T, LX0 - 2, 18, COL_BG);
+            if (lv_row == 0 && lv_col >= 0) {
+                char b[6];
+                gfx_textf(fb_bot, 6, BASS_T + 1, F_SMALL, COL_TEXT3, "STEP %d", lv_col + 1);
+                if ((f0 & STEP_TYPE_MASK) == STEP_NOTE) {
+                    sprintf(b, "%s%d", notes12[p->note[lv_col] % 12], p->note[lv_col] / 12 + 1);
+                    if (b[1] == '-') memmove(b + 1, b + 2, strlen(b + 1));
+                } else strcpy(b, (f0 & STEP_TYPE_MASK) == STEP_TIE ? "TIE" : "REST");
+                gfx_text(fb_bot, 6, BASS_T + 9, F_MAIN, COL_TEXT, b);
+            }
+            note_sig = ns;
+        }
+    }
     if (lsig != lv_label_sig) { live_labels(); lv_label_sig = lsig; }
     for (s = 0; s < 16; s++) {
         int play = playing && s == step;
@@ -232,16 +263,18 @@ static void live_touch(int phase)          /* 0 down, 1 drag, 2 up */
         s = clampi(s, 0, 15);
         t_step = (int8_t)s;
         if (t_y < STRIP_Y) {
+            /* bass: tap an empty step to place the last note, tap a note to
+             * rest it, drag up / down to move it by scale steps */
             uint8_t f = p->flags[s];
             t_kind = 1; lv_row = 0; lv_col = (int8_t)s;
-            t_start_note = p->note[s];
             t_start_flags = f;
+            t_placed = 0;
+            t_changed = 0;
             if ((f & STEP_TYPE_MASK) != STEP_NOTE) {
-                uint8_t n = snap_note(BASS_B - clampi(t_y, BASS_T, BASS_B));
-                last_note = n;
-                app_set_bass((uint8_t)s, n, (uint8_t)(STEP_NOTE | (f & STEP_LOCK)));
-                t_moved = 1;
-            }
+                t_start_note = snap_note(last_note);
+                app_set_bass((uint8_t)s, t_start_note, (uint8_t)(STEP_NOTE | (f & STEP_LOCK)));
+                t_placed = 1;
+            } else t_start_note = p->note[s];
         } else if (t_y < LANE_Y0 - 2) {
             uint8_t f = p->flags[s];
             if ((f & STEP_TYPE_MASK) == STEP_NOTE) {        /* none -> A -> S -> A+S */
@@ -259,21 +292,23 @@ static void live_touch(int phase)          /* 0 down, 1 drag, 2 up */
         }
     } else if (phase == 1) {
         if (t_kind == 1) {
-            uint8_t n = snap_note(BASS_B - clampi(t_y, BASS_T, BASS_B));
-            if (n != p->note[t_step] && (p->flags[t_step] & STEP_TYPE_MASK) == STEP_NOTE &&
-                (t_moved || (t_y - t_sy > 3 || t_sy - t_y > 3))) {
-                app_set_bass((uint8_t)t_step, n, p->flags[t_step]);
+            int steps = (t_sy - t_y) / BASS_STEP_PX, k;
+            uint8_t n = t_start_note, f = (uint8_t)(STEP_NOTE | (t_start_flags & ~STEP_TYPE_MASK));
+            if (!t_placed) f = t_start_flags;
+            for (k = 0; k < steps; k++) n = corr_scale_step(n, 1, &SH->proj.gen);
+            for (k = 0; k > steps; k--) n = corr_scale_step(n, -1, &SH->proj.gen);
+            if (n != p->note[t_step] && (p->flags[t_step] & STEP_TYPE_MASK) == STEP_NOTE) {
+                app_set_bass((uint8_t)t_step, n, (p->flags[t_step] & ~STEP_TYPE_MASK) | STEP_NOTE);
                 last_note = n;
-                t_moved = 1;
+                t_changed = 1;
             }
+            (void)f;
         } else if (t_kind == 3 && s >= 0 && s <= 15 && s != t_step) {
             t_step = (int8_t)s;                               /* swipe paints */
             if ((int)((p->drum[t_lane] >> s) & 1) != t_paint) app_toggle_drum((uint8_t)t_lane, (uint8_t)s);
         }
-    } else if (t_kind == 1 && !t_moved && (t_start_flags & STEP_TYPE_MASK) == STEP_NOTE) {
-        int ny = bass_y(t_start_note);
-        if (t_sy - ny <= 5 && ny - t_sy <= 5)                  /* tapped the note: rest */
-            app_set_bass((uint8_t)t_step, t_start_note, (uint8_t)(t_start_flags & STEP_LOCK));
+    } else if (t_kind == 1 && !t_placed && !t_changed && (t_start_flags & STEP_TYPE_MASK) == STEP_NOTE) {
+        app_set_bass((uint8_t)t_step, t_start_note, (uint8_t)(t_start_flags & STEP_LOCK));   /* tap: rest */
     }
 }
 
@@ -521,7 +556,8 @@ static void panel_touch(int phase)
         knob_drag = 1;
     } else if (phase == 1 && knob_drag) {
         int dy = t_sy - t_y, k = knob_cur;
-        knob_set(k, knob_start + (knob_is_enum(k) ? dy / 14 : dy / 2));
+        (void)dy;
+        knob_set(k, drag_value(knob_start, knob_lo[k], knob_hi[k], knob_is_enum(k)));
     } else if (phase == 2 && knob_drag) {
         int k = knob_cur;
         if (t_temp && k != K_TEST) knob_set(k, saved);                /* L: temporary */
@@ -765,7 +801,8 @@ static void dr_touch(int phase)
         dr_drag = 1;
     } else if (phase == 1 && dr_drag) {
         int dy = t_sy - t_y;
-        dr_set(dr_cur, dr_start + (dr_is_enum(dr_cur) ? dy / 14 : dr_cur >= D_TUNE ? dy / 6 : dy / 2));
+        (void)dy;
+        dr_set(dr_cur, drag_value(dr_start, 0, dr_hi(dr_cur), dr_is_enum(dr_cur)));
     } else if (phase == 2 && dr_drag) {
         if (t_temp) {                                              /* L: temporary, exact */
             if (dr_cur == D_KIT) dr_set(D_KIT, saved);
@@ -951,7 +988,7 @@ static void gen_touch(int phase)
         int v = ((t_x - SL_X0) * gen_max[t_gen_row] + SL_W / 2) / SL_W;
         *gen_field(t_gen_row) = (uint8_t)clampi(v, 0, gen_max[t_gen_row]);
     } else if (phase == 1 && t_gen_row == 100) {
-        SH->proj.gen.mutation = (uint8_t)clampi(dial_start + (t_sy - t_y) / 6, 0, 15);
+        SH->proj.gen.mutation = (uint8_t)drag_value(dial_start, 0, 15, 0);
     }
 }
 
