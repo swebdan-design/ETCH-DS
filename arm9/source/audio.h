@@ -140,6 +140,10 @@ typedef struct {
 extern volatile audio_stats_t astats;
 extern const char * const stage_names[ST_COUNT];
 
+/* live notes from the KEYS tab (main loop -> render interrupt): EV_NOTE,
+ * EV_GLIDE, EV_GATE_OFF.  While a key is held the sequencer's bass is muted. */
+void live_note(uint8_t type, uint8_t note, uint8_t accent);
+
 /* render one block from its events into out_l/out_r (int16) */
 void audio_render_block(const evslot_t *evs, uint32_t blk, int16_t *out_l, int16_t *out_r);
 void audio_engine_init(void);

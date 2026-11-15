@@ -29,7 +29,8 @@ Milestone 1 only proves the sound. These ideas came up while building it. None o
 
 ## UI
 
-* **Tabs still to build.** KEYS (two octaves, in-scale, with an accent/slide strip) needs a live-note path from the ARM9 to the voice. SONG/FILE needs the chain and saves. PANEL needs its patch cables.
+* **Still to build.** FILE (saves on the SD card; the save format is waiting on a decision) and PANEL's patch cables.
+* **KEYS as CORRODE material.** Captured KEYS input could feed CORRODE, as the brief describes.
 * **XY motion recording** (the trail already exists).
 * **Step probability and conditions** in LIVE. ETCH edits them on its TRACK screen.
 * **Locks** (step, lane, bass, pattern) shown and settable in LIVE and GEN.

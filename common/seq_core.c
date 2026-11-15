@@ -453,6 +453,30 @@ void seq_command(uint32_t v)
     case CMD_MUTES:
         S->proj.mutes = (uint8_t)arg;
         break;
+    case CMD_QUEUE:                                    /* ETCH's seq_queue_pattern */
+        if (arg >= NUM_PATTERNS) break;
+        if (!S->playing) { S->cur = (uint8_t)arg; S->queued = 0xFF; }
+        else S->queued = (uint8_t)arg;
+        S->evo_state = EVO_IDLE;
+        break;
+    case CMD_CHAIN: {
+        uint8_t pos = (uint8_t)((arg >> 16) & (CHAIN_LEN - 1)), pat = (uint8_t)(arg >> 8), rep = (uint8_t)arg;
+        S->proj.chain.pat[pos] = pat < NUM_PATTERNS ? pat : 0xFF;
+        S->proj.chain.rep[pos] = rep < 1 ? 1 : rep > 8 ? 8 : rep;
+        break; }
+    case CMD_SONG:
+        S->proj.chain.song = (uint8_t)(arg != 0);
+        S->queued = 0xFF;
+        S->evo_state = EVO_IDLE;
+        break;
+    case CMD_JUMP:                                     /* ETCH's seq_jump_chain */
+        arg &= CHAIN_LEN - 1;
+        if (S->proj.chain.pat[arg] >= NUM_PATTERNS) break;
+        if (!S->playing) {
+            S->chain_pos = (uint8_t)arg; S->chain_bar = 0; S->cur = S->proj.chain.pat[arg];
+        } else chain_jump = (uint8_t)arg;
+        S->evo_state = EVO_IDLE;
+        break;
     default:
         break;
     }

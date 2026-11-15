@@ -32,7 +32,11 @@ void app_toggle_drum(uint8_t lane, uint8_t step)
 
 void app_replace(const pattern_t *p, uint8_t undo)
 {
-    uint8_t pat = SH->cur;
+    app_replace_at(SH->cur, p, undo);
+}
+
+void app_replace_at(uint8_t pat, const pattern_t *p, uint8_t undo)
+{
     uint32_t spin = 0;
     /* the previous replace must have been taken before edit_pat is reused */
     while (SH->edit_ack != sent_replace && ++spin < 2000000u) { }
@@ -119,4 +123,20 @@ void app_undo(void)
 void app_toggle_mute(uint8_t bit)
 {
     app_send(CMD(CMD_MUTES, SH->proj.mutes ^ (1u << bit)));
+}
+
+void app_queue(uint8_t pat) { app_send(CMD(CMD_QUEUE, pat)); }
+void app_chain(uint8_t pos, uint8_t pat, uint8_t rep)
+{
+    app_send(CMD(CMD_CHAIN, ((uint32_t)pos << 16) | ((uint32_t)pat << 8) | rep));
+}
+void app_song(uint8_t on) { app_send(CMD(CMD_SONG, on)); }
+void app_jump(uint8_t pos) { app_send(CMD(CMD_JUMP, pos)); }
+
+uint8_t app_pattern_empty(uint8_t pat)
+{
+    const pattern_t *p = &SH->proj.pat[pat & 31];
+    uint8_t l;
+    for (l = 0; l < NUM_LANES; l++) if (p->drum[l]) return 0;
+    return pattern_note_count(p) == 0;
 }

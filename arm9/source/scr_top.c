@@ -200,9 +200,9 @@ static void draw_status(void)
         txt(&con_top, 16, 1, (frames & 32) ? T_SULFUR : T_DIM, "    -- PRESS START --     ");
     } else {
         txt(&con_top, 16, 1, T_ACID, "%-7.7s", corr_mode_names[pr->gen.mode % EVO_COUNT]);
-        txt(&con_top, 16, 9, T_TEXT, "GEN %03d", p->gen);
-        if (bars) txt(&con_top, 16, 17, T_TEXT, "EVO %d   ", bars);
-        else txt(&con_top, 16, 17, T_DIM, "EVO -   ");
+        txt(&con_top, 16, 9, T_TEXT, "P%02d G%03d", SH->cur, p->gen);
+        if (bars) txt(&con_top, 16, 19, T_TEXT, "EVO %d ", bars);
+        else txt(&con_top, 16, 19, T_DIM, "EVO - ");
     }
     if (play != last_play || fill != last_fill) {
         restore(204, 124, 50, 12);

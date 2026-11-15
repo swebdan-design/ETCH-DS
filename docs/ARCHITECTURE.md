@@ -69,6 +69,9 @@ The audio ring (2 × 512 int16) is also in main RAM. The ARM9 writes it through 
 * `CMD_SET_BASS` (note and flags of one step) and `CMD_SET_DRUM` (one hit).
 * `CMD_REPLACE` for whole-pattern operations such as GEN and REGEN. The ARM9 writes the new pattern into `edit_pat` and waits for `edit_ack` before reusing that buffer.
 * `CMD_FILL` (one-shot, latch on/off, fresh masks each bar), `CMD_EVOLVE` and `CMD_MUTES`.
+* `CMD_QUEUE`, `CMD_CHAIN`, `CMD_SONG` and `CMD_JUMP` (SONG tab).
+
+KEYS doesn't go through the ARM7. Live notes go from the main loop to the ARM9 render interrupt through a small ring (`live_note` in `render.arm.c`). While a key is held, the sequencer's bass events are ignored.
 
 Every edit moves the pattern's edit epoch, so a CORROSION candidate prepared before the edit is refused instead of overwriting it. Edits and commits therefore compose with no race. The host test checks this.
 

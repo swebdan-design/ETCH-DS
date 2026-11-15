@@ -66,8 +66,43 @@ void audio_engine_init(void)
 #endif
 }
 
+/* ---- live notes (KEYS tab): main loop -> render interrupt ------------------
+ * A single-producer ring on the ARM9 itself; the interrupt drains it at the
+ * start of each block.  While a key is held the 303 is the player's: the
+ * sequencer's bass events are ignored until the key is released. */
+#define LIVE_Q 16
+static volatile ev_t live_q[LIVE_Q];
+static volatile uint32_t live_head, live_tail;
+static uint8_t live_owns;
+
+void live_note(uint8_t type, uint8_t note, uint8_t accent)
+{
+    uint32_t h = live_head;
+    if (h - live_tail >= LIVE_Q) return;
+    live_q[h & (LIVE_Q - 1)].type = type;
+    live_q[h & (LIVE_Q - 1)].a = note;
+    live_q[h & (LIVE_Q - 1)].b = accent;
+    __asm__ volatile("" ::: "memory");
+    live_head = h + 1;
+}
+
+static AUDIO_CODE void live_drain(void)
+{
+    while (live_tail != live_head) {
+        volatile ev_t *e = &live_q[live_tail & (LIVE_Q - 1)];
+        switch (e->type) {
+        case EV_NOTE: acid_note(e->a, e->b); live_owns = 1; break;
+        case EV_GLIDE: acid_glide(e->a, e->b); live_owns = 1; break;
+        case EV_GATE_OFF: acid_gate_off(); live_owns = 0; break;
+        default: break;
+        }
+        live_tail++;
+    }
+}
+
 static AUDIO_CODE void acid_event(const ev_t *e)
 {
+    if (live_owns && (e->type == EV_NOTE || e->type == EV_GLIDE || e->type == EV_GATE_OFF)) return;
     switch (e->type) {
     case EV_NOTE: acid_note(e->a, e->b); break;
     case EV_GLIDE: acid_glide(e->a, e->b); break;
@@ -106,6 +141,7 @@ AUDIO_CODE void audio_render_block(const evslot_t *evs, uint32_t blk, int16_t *o
     t[1] = clk();
 
     /* ---- ACID ---------------------------------------------------------- */
+    live_drain();
     for (c = 0, j = 0; c < AUDIO_BLOCK; c += CTRL_LEN) {
         while (j < nev && evq[j].off <= c) acid_event(&evq[j++]);
         acid_render(acid_buf + c);

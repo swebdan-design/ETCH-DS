@@ -89,7 +89,11 @@ enum {
     CMD_REPLACE,      /* arg = pat | undo<<8: copy edit_pat in (GEN, REGEN)   */
     CMD_FILL,         /* arg = FILL_*; masks in fill_req                      */
     CMD_EVOLVE,       /* evolve at the next bar line (ETCH's SELECT+A)        */
-    CMD_MUTES         /* arg = mutes byte (bit0 bass, bit1..4 lanes)          */
+    CMD_MUTES,        /* arg = mutes byte (bit0 bass, bit1..4 lanes)          */
+    CMD_QUEUE,        /* arg = pattern: plays from the next bar line (ETCH)   */
+    CMD_CHAIN,        /* arg = pos<<16 | pat<<8 | rep  (pat 0xFF = END)       */
+    CMD_SONG,         /* arg = 1: follow the chain                            */
+    CMD_JUMP          /* arg = chain position: from the next bar line         */
 };
 enum { FILL_ONESHOT, FILL_LATCH_ON, FILL_LATCH_OFF, FILL_UPDATE };
 #define CMD_BASS_ARG(pat, step, note, flags) \

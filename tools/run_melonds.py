@@ -187,14 +187,14 @@ def main():
     dumps = list(range(120, a.frames, 120))
     if a.touch:
         # XY tab, then: tap, drag, and an L-held (temporary) drag
-        script += ["380:TOUCH:96,10,3", "399:DUMP", "400:TOUCH:40,40,30", "429:DUMP", "430:SHOT", "460:TOUCH:220,160,60",
+        script += ["380:TOUCH:64,10,3", "399:DUMP", "400:TOUCH:40,40,30", "429:DUMP", "430:SHOT", "460:TOUCH:220,160,60",
                    "519:DUMP", "520:SHOT", "560:L:80", "570:TOUCH:128,40,40", "605:DUMP", "606:SHOT",
                    "640:DUMP", "641:SHOT"]
     if a.stress:
         t = a.frames // 2
         # PANEL tab, tap the CPU TEST knob (a tap steps a choice), back to LIVE
-        script += ["%d:TOUCH:160,10,3" % t, "%d:TOUCH:224,172,3" % (t + 20),
-                   "%d:TOUCH:32,10,3" % (t + 60), "%d:SHOT" % (t + 300)]
+        script += ["%d:TOUCH:106,10,3" % t, "%d:TOUCH:224,172,3" % (t + 20),
+                   "%d:TOUCH:23,10,3" % (t + 60), "%d:SHOT" % (t + 300)]
     script += ["%d:DUMP" % d for d in dumps]
     script.append("%d:SHOT" % (a.frames - 1))
     mem, wav, log = run(a, ";".join(script), a.name, a.frames)

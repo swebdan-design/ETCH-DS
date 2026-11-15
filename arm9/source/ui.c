@@ -26,8 +26,9 @@
 #include "audio.h"
 #include "dsp_tables.h"
 
-enum { TAB_LIVE, TAB_XY, TAB_PANEL, TAB_GEN, TAB_COUNT };
-static const char * const tab_names[TAB_COUNT] = { "LIVE", "XY", "PANEL", "GEN" };
+enum { TAB_LIVE, TAB_XY, TAB_PANEL, TAB_KEYS, TAB_GEN, TAB_SONG, TAB_COUNT };
+static const char * const tab_names[TAB_COUNT] = { "LIVE", "XY", "PANEL", "KEYS", "GEN", "SONG" };
+#define TAB_W 42
 static uint8_t tab = TAB_LIVE, need_full = 1;
 uint8_t ui_stress;
 static uint32_t frame;
@@ -56,10 +57,10 @@ static void draw_tabs(void)
 {
     int i;
     for (i = 0; i < TAB_COUNT; i++) {
-        int x = i * 64, len = (int)strlen(tab_names[i]), act = i == tab;
-        gfx_button(fb_bot, x + 1, 1, 62, 20, act);
-        gfx_led(fb_bot, x + 10, 11, act, COL_AMBER);
-        txt(&con_bot, 1, i * 8 + 4 - len / 2 + 1, act ? T_HOT : T_BRIGHT, "%s", tab_names[i]);
+        int x = 2 + i * TAB_W, len = (int)strlen(tab_names[i]), act = i == tab;
+        gfx_button(fb_bot, x, 1, TAB_W - 1, 20, act);
+        gfx_rect(fb_bot, x + 4, 17, TAB_W - 9, 2, act ? COL_AMBER : C(4, 3, 2));    /* lit bar */
+        txt(&con_bot, 1, (x + TAB_W / 2 - len * 4 + 3) / 8, act ? T_HOT : T_BRIGHT, "%s", tab_names[i]);
     }
     gfx_hazard(fb_bot, 0, 22, 256, 3);
 }
@@ -752,6 +753,309 @@ static void gen_keys(uint32_t down, uint32_t held, uint32_t rep)
     }
 }
 
+/* ================================= KEYS ==================================== */
+/* Two octaves of the GEN key and scale only (no wrong notes), an ACCENT and a
+ * SLIDE latch, octave shift, and REC: while playing, a key writes into the
+ * step that is sounding; while stopped, it writes step by step (ETCH-style
+ * step entry; B + A writes a rest).  Holding a key takes the 303 from the
+ * sequencer until you let go. */
+#define KB_Y0 64
+#define KB_Y1 146
+#define KB_BTN_Y 156
+static uint8_t kb_oct = 1, kb_acc, kb_slide, kb_rec, kb_rec_step;
+static uint8_t kb_n, kb_note[26];
+static int8_t kb_cur = 0, kb_down = -1, kb_row;
+static uint8_t kb_by_button, kb_flash;
+static uint32_t kb_sig = 0xFFFFFFFF;
+static const char * const kb_btn_names[5] = { "ACCENT", "SLIDE", "OCT-", "OCT+", "REC" };
+
+static void kb_layout(void)
+{
+    const gen_t *g = &SH->proj.gen;
+    int root, m, max_oct = (NOTE_MAX - 24 - g->key % 12) / 12;
+    if (kb_oct > max_oct) kb_oct = (uint8_t)max_oct;
+    root = g->key % 12 + 12 * kb_oct;
+    kb_n = 0;
+    for (m = root; m <= root + 24 && kb_n < 25; m++)
+        if (corr_in_scale((uint8_t)m, g->key % 12, g->scale % SCALE_COUNT)) kb_note[kb_n++] = (uint8_t)m;
+    if (kb_cur >= kb_n) kb_cur = (int8_t)(kb_n - 1);
+}
+
+static int kb_w(void) { return 248 / (kb_n ? kb_n : 1); }
+
+static void kb_record(uint8_t note)
+{
+    uint8_t f = (uint8_t)(STEP_NOTE | (kb_acc ? STEP_ACCENT : 0) | (kb_slide ? STEP_SLIDE : 0));
+    if (!kb_rec) return;
+    if (SH->playing) app_set_bass(SH->step, note, f);
+    else { app_set_bass(kb_rec_step, note, f); kb_rec_step = (uint8_t)((kb_rec_step + 1) & 15); }
+    kb_flash = 6;
+}
+
+static void kb_play(int i, int legato)
+{
+    if (i < 0 || i >= kb_n) return;
+    live_note(legato && kb_slide && kb_down >= 0 ? EV_GLIDE : EV_NOTE, kb_note[i], kb_acc);
+    kb_down = (int8_t)i;
+    kb_record(kb_note[i]);
+}
+
+static void kb_release(void)
+{
+    if (kb_down >= 0) live_note(EV_GATE_OFF, 0, 0);
+    kb_down = -1;
+}
+
+static void kb_button(int i)
+{
+    switch (i) {
+    case 0: kb_acc ^= 1; break;
+    case 1: kb_slide ^= 1; break;
+    case 2: if (kb_oct > 0) kb_oct--; break;
+    case 3: kb_oct++; break;
+    default: kb_rec ^= 1; kb_rec_step = 0; break;
+    }
+    kb_layout();
+}
+
+static void kb_draw(void)
+{
+    int i, w = kb_w(), x0 = 4 + (248 - w * kb_n) / 2;
+    char b[8];
+    restore_bot(0, 25, 256, 167);
+    /* readout: note, octave, REC position */
+    if (kb_down >= 0) {
+        uint8_t n = kb_note[kb_down];
+        txt(&con_bot, 5, 2, T_HOT, "%s%d", notes12[n % 12], n / 12 + 1);
+    } else txt(&con_bot, 5, 2, T_DIM, "---");
+    txt(&con_bot, 4, 2, T_DIM, "NOTE");
+    txt(&con_bot, 4, 9, T_DIM, "%s %s", notes12[SH->proj.gen.key % 12], corr_scale_names[SH->proj.gen.scale % SCALE_COUNT]);
+    txt(&con_bot, 5, 9, T_TEXT, "OCT %d", kb_oct + 1);
+    txt(&con_bot, 4, 22, T_DIM, "REC STEP");
+    sprintf(b, "%02d", (SH->playing ? SH->step : kb_rec_step) + 1);
+    gfx_seg7_str(fb_bot, 214, 41, kb_rec ? b : "--", 4, kb_rec ? C(31, 6, 2) : COL_GHOST, COL_GHOST);
+    for (i = 0; i < kb_n; i++) {
+        int x = x0 + i * w, root = (kb_note[i] % 12) == SH->proj.gen.key % 12;
+        int down = i == kb_down, cur = kb_row == 0 && i == kb_cur;
+        gfx_button(fb_bot, x, KB_Y0, w - 1, KB_Y1 - KB_Y0, down);
+        if (down) gfx_rect(fb_bot, x + 2, KB_Y0 + 2, w - 5, 4, kb_acc ? C(31, 28, 18) : COL_AMBER);
+        gfx_led(fb_bot, x + (w - 1) / 2, KB_Y1 - 8, root, COL_AMBER);
+        if (cur) gfx_frame(fb_bot, x - 1, KB_Y0 - 1, w + 1, KB_Y1 - KB_Y0 + 2, COL_SULFUR);
+        if (w >= 16) {
+            const char *nm = notes12[kb_note[i] % 12];
+            txt(&con_bot, 15, (x + (w - 1) / 2 - 4) / 8, root ? T_HOT : T_BRIGHT, "%c", nm[0]);
+            if (nm[1] == '#') txt(&con_bot, 14, (x + (w - 1) / 2 - 4) / 8, T_DIM, "#");
+        }
+    }
+    for (i = 0; i < 5; i++) {
+        int x = 2 + i * 51, on = i == 0 ? kb_acc : i == 1 ? kb_slide : i == 4 ? kb_rec : 0;
+        gfx_button(fb_bot, x, KB_BTN_Y, 49, 30, on);
+        if (i != 2 && i != 3) gfx_led(fb_bot, x + 24, KB_BTN_Y + 22, on, i == 4 ? C(31, 6, 2) : COL_AMBER);
+        if (kb_row == 1 && kb_cur == i) gfx_frame(fb_bot, x - 1, KB_BTN_Y - 1, 51, 32, COL_SULFUR);
+        txt(&con_bot, 20, (x + 24) / 8 - (int)strlen(kb_btn_names[i]) / 2, on ? T_HOT : T_BRIGHT, "%s", kb_btn_names[i]);
+    }
+}
+
+static void kb_frame(void)
+{
+    uint32_t sig;
+    kb_layout();
+    sig = (uint32_t)kb_down * 7 + kb_cur * 131 + kb_row * 3 + kb_acc * 17 + kb_slide * 19 + kb_rec * 23 +
+          kb_oct * 29 + kb_n * 37 + SH->proj.gen.key * 41 + SH->proj.gen.scale * 43 +
+          (kb_rec ? (uint32_t)(SH->playing ? SH->step : kb_rec_step) * 1009 : 0) + (kb_flash ? 1 : 0) * 7919;
+    if (kb_flash) kb_flash--;
+    if (sig != kb_sig) { kb_draw(); kb_sig = sig; }
+}
+
+static void kb_touch(int phase)
+{
+    int w = kb_w(), x0 = 4 + (248 - w * kb_n) / 2;
+    if (phase == 0 && t_y >= KB_BTN_Y) {
+        int i = (t_x - 2) / 51;
+        kb_row = 1; kb_cur = (int8_t)(i > 4 ? 4 : i);
+        kb_button(kb_cur);
+        return;
+    }
+    if (t_y < KB_Y0 || t_y >= KB_Y1) { if (phase == 2) kb_release(); return; }
+    if (phase < 2) {
+        int i = (t_x - x0) / w;
+        if (i < 0) i = 0;
+        if (i >= kb_n) i = kb_n - 1;
+        kb_row = 0;
+        if (phase == 0 || i != kb_down) { kb_cur = (int8_t)i; kb_play(i, phase == 1); }
+    } else kb_release();
+}
+
+static void kb_keys(uint32_t down, uint32_t held, uint32_t rep)
+{
+    if (kb_by_button && !(held & KEY_A)) { kb_release(); kb_by_button = 0; }
+    if (held & KEY_A) {
+        if ((down & KEY_A) && (held & KEY_B) && kb_rec && !SH->playing) {      /* B + A: a rest */
+            app_set_bass(kb_rec_step, 12, 0);
+            kb_rec_step = (uint8_t)((kb_rec_step + 1) & 15);
+            return;
+        }
+        if (down & KEY_A) {
+            if (kb_row == 1) kb_button(kb_cur);
+            else { kb_play(kb_cur, 0); kb_by_button = 1; }
+            return;
+        }
+        if (kb_row == 0 && kb_by_button) {                                  /* A + D-pad: next note */
+            if ((rep & KEY_RIGHT) && kb_cur < kb_n - 1) { kb_cur++; kb_play(kb_cur, 1); }
+            if ((rep & KEY_LEFT) && kb_cur > 0) { kb_cur--; kb_play(kb_cur, 1); }
+        }
+        return;
+    }
+    if (rep & KEY_UP) kb_row = 0;
+    if (rep & KEY_DOWN) { kb_row = 1; if (kb_cur > 4) kb_cur = 4; }
+    if ((rep & KEY_LEFT) && kb_cur > 0) kb_cur--;
+    if ((rep & KEY_RIGHT) && kb_cur < (kb_row ? 4 : kb_n - 1)) kb_cur++;
+}
+
+/* ================================= SONG ==================================== */
+/* The 32 patterns (tap to queue one for the next bar; with SONG on, tap to
+ * put it in the selected chain slot) and ETCH's 16-slot chain with repeats. */
+#define BANK_Y0 32
+#define CHAIN_Y0 104
+#define SG_BTN_Y 140
+static uint8_t sg_sel, sg_area, sg_cur, sg_flash[6];
+static uint32_t sg_sig = 0xFFFFFFFF;
+static const char * const sg_btn_names[6] = { "SONG", "PAT-", "PAT+", "REP-", "REP+", "COPY" };
+
+static void sg_draw(void)
+{
+    const chain_t *ch = &SH->proj.chain;
+    int i, cur = SH->cur, q = SH->queued, blink = (frame >> 4) & 1;
+    restore_bot(0, 25, 256, 167);
+    for (i = 0; i < NUM_PATTERNS; i++) {
+        int x = (i & 7) * 32, y = BANK_Y0 + (i >> 3) * 16, empty = app_pattern_empty((uint8_t)i);
+        int sel = sg_area == 0 && sg_cur == i;
+        uint16_t bg = i == cur ? C(10, 5, 1) : (i == q && blink) ? C(6, 3, 1) : COL_LCD;
+        gfx_well(fb_bot, x + 2, y, 29, 14, bg);
+        if (!empty) gfx_rect(fb_bot, x + 24, y + 4, 3, 6, i == cur ? COL_AMBER : C(14, 9, 3));
+        if (sel) gfx_frame(fb_bot, x + 1, y - 1, 31, 16, COL_SULFUR);
+        txt(&con_bot, (y >> 3), (x >> 3) + 1, i == cur ? T_HOT : empty ? T_DIM : T_BRIGHT, "%02d", i);
+    }
+    txt(&con_bot, 12, 0, T_DIM, "CHAIN");
+    txt(&con_bot, 12, 7, ch->song ? T_ACID : T_DIM, ch->song ? "SONG ON " : "SONG OFF");
+    txt(&con_bot, 12, 17, T_DIM, "BAR %d/%d ", SH->chain_bar + 1, ch->rep[SH->chain_pos & 15]);
+    for (i = 0; i < CHAIN_LEN; i++) {
+        int x = (i & 7) * 32, y = CHAIN_Y0 + (i >> 3) * 16;
+        int playing = ch->song && SH->playing && SH->chain_pos == i, sel = sg_sel == i;
+        gfx_well(fb_bot, x + 1, y, 31, 14, playing ? C(10, 5, 1) : COL_LCD);
+        if (sel) gfx_frame(fb_bot, x, y - 1, 32, 16, sg_area == 1 ? COL_SULFUR : C(14, 12, 4));
+        if (ch->pat[i] < NUM_PATTERNS)
+            txt(&con_bot, (y >> 3), (x >> 3), playing ? T_HOT : T_BRIGHT, "%02dx%d", ch->pat[i], ch->rep[i]);
+        else txt(&con_bot, (y >> 3), (x >> 3), T_DIM, "END ");
+    }
+    for (i = 0; i < 6; i++) {
+        int x = 2 + i * 42, on = i == 0 ? ch->song : sg_flash[i] != 0;
+        gfx_button(fb_bot, x, SG_BTN_Y, 40, 26, sg_flash[i] != 0);
+        if (i == 0) gfx_led(fb_bot, x + 20, SG_BTN_Y + 19, on, COL_ACID);
+        if (sg_area == 2 && sg_cur == i) gfx_frame(fb_bot, x - 1, SG_BTN_Y - 1, 42, 28, COL_SULFUR);
+        txt(&con_bot, 18, (x + 20) / 8 - (int)strlen(sg_btn_names[i]) / 2, T_BRIGHT, "%s", sg_btn_names[i]);
+    }
+    txt(&con_bot, 22, 0, T_DIM, ch->song ? "TAP A PATTERN: SET THE SLOT    " : "TAP A PATTERN: PLAY IT NEXT BAR ");
+}
+
+static void sg_frame(void)
+{
+    const chain_t *ch = &SH->proj.chain;
+    uint32_t sig = SH->cur * 3u + SH->queued * 5u + ch->song * 7u + sg_sel * 11u + sg_area * 13u + sg_cur * 17u +
+                   SH->chain_pos * 19u + SH->chain_bar * 23u + SH->playing * 29u + ((frame >> 4) & 1) * (SH->queued != 0xFF) * 31u;
+    int i;
+    for (i = 0; i < CHAIN_LEN; i++) sig = sig * 33 + ch->pat[i] * 9 + ch->rep[i];
+    for (i = 0; i < NUM_PATTERNS; i++) sig = sig * 3 + app_pattern_empty((uint8_t)i);
+    for (i = 0; i < 6; i++) { sig = sig * 5 + (sg_flash[i] != 0); if (sg_flash[i]) sg_flash[i]--; }
+    if (sig != sg_sig) { sg_draw(); sg_sig = sig; }
+}
+
+static void sg_pick_pattern(uint8_t p)
+{
+    const chain_t *ch = &SH->proj.chain;
+    if (ch->song) app_chain(sg_sel, p, ch->pat[sg_sel] < NUM_PATTERNS ? ch->rep[sg_sel] : 4);
+    else app_queue(p);
+}
+
+static void sg_button(int i)
+{
+    const chain_t *ch = &SH->proj.chain;
+    uint8_t pat = ch->pat[sg_sel], rep = ch->rep[sg_sel];
+    sg_flash[i] = 8;
+    switch (i) {
+    case 0: app_song(!ch->song); break;
+    case 1: app_chain(sg_sel, pat >= NUM_PATTERNS ? NUM_PATTERNS - 1 : pat == 0 ? 0xFF : (uint8_t)(pat - 1), rep); break;
+    case 2: app_chain(sg_sel, pat >= NUM_PATTERNS ? 0 : pat == NUM_PATTERNS - 1 ? 0xFF : (uint8_t)(pat + 1), rep); break;
+    case 3: if (pat < NUM_PATTERNS && rep > 1) app_chain(sg_sel, pat, (uint8_t)(rep - 1)); break;
+    case 4: if (pat < NUM_PATTERNS && rep < 8) app_chain(sg_sel, pat, (uint8_t)(rep + 1)); break;
+    default: {                                   /* copy into the next empty pattern, play it next */
+        uint8_t k;
+        for (k = 1; k < NUM_PATTERNS; k++) {
+            uint8_t t = (uint8_t)((SH->cur + k) & 31);
+            if (app_pattern_empty(t)) {
+                pattern_t p = SH->proj.pat[SH->cur];
+                app_replace_at(t, &p, 0);
+                if (!ch->song) app_queue(t);
+                break;
+            }
+        }
+        break; }
+    }
+}
+
+static void sg_touch(int phase)
+{
+    if (phase != 0) return;
+    if (t_y >= BANK_Y0 && t_y < BANK_Y0 + 64) {
+        uint8_t p = (uint8_t)(((t_y - BANK_Y0) / 16) * 8 + t_x / 32);
+        sg_area = 0; sg_cur = p;
+        sg_pick_pattern(p);
+    } else if (t_y >= CHAIN_Y0 && t_y < CHAIN_Y0 + 32) {
+        uint8_t s = (uint8_t)(((t_y - CHAIN_Y0) / 16) * 8 + t_x / 32);
+        if (s == sg_sel && SH->proj.chain.song) app_jump(s);       /* tap again: jump there */
+        sg_area = 1; sg_sel = s;
+    } else if (t_y >= SG_BTN_Y && t_y < SG_BTN_Y + 26) {
+        int i = (t_x - 2) / 42;
+        sg_area = 2; sg_cur = (uint8_t)(i > 5 ? 5 : i);
+        sg_button(sg_cur);
+    }
+}
+
+static void sg_keys(uint32_t down, uint32_t held, uint32_t rep)
+{
+    const chain_t *ch = &SH->proj.chain;
+    if (held & KEY_A) {
+        if (sg_area == 1) {
+            if (rep & KEY_UP) sg_button(2);
+            if (rep & KEY_DOWN) sg_button(1);
+            if (rep & KEY_RIGHT) sg_button(4);
+            if (rep & KEY_LEFT) sg_button(3);
+        }
+        if (down & KEY_A) {
+            if (held & KEY_B) { if (sg_area == 1) app_chain(sg_sel, 0xFF, 1); return; }   /* B + A: END */
+            if (sg_area == 0) sg_pick_pattern(sg_cur);
+            else if (sg_area == 1 && ch->song) app_jump(sg_sel);
+            else if (sg_area == 2) sg_button(sg_cur);
+        }
+        return;
+    }
+    if (sg_area == 0) {
+        if (rep & KEY_LEFT) sg_cur = (uint8_t)((sg_cur + 31) & 31);
+        if (rep & KEY_RIGHT) sg_cur = (uint8_t)((sg_cur + 1) & 31);
+        if ((rep & KEY_UP) && sg_cur >= 8) sg_cur -= 8;
+        if (rep & KEY_DOWN) { if (sg_cur < 24) sg_cur += 8; else { sg_area = 1; } }
+    } else if (sg_area == 1) {
+        if (rep & KEY_LEFT) sg_sel = (uint8_t)((sg_sel + 15) & 15);
+        if (rep & KEY_RIGHT) sg_sel = (uint8_t)((sg_sel + 1) & 15);
+        if (rep & KEY_UP) { if (sg_sel >= 8) sg_sel -= 8; else sg_area = 0; }
+        if (rep & KEY_DOWN) { if (sg_sel < 8) sg_sel += 8; else { sg_area = 2; sg_cur = 0; } }
+    } else {
+        if ((rep & KEY_LEFT) && sg_cur > 0) sg_cur--;
+        if ((rep & KEY_RIGHT) && sg_cur < 5) sg_cur++;
+        if (rep & KEY_UP) sg_area = 1;
+    }
+}
+
 /* =============================== dispatch ================================= */
 static void enter_tab(void)
 {
@@ -767,6 +1071,8 @@ static void enter_tab(void)
     case TAB_LIVE: live_draw_static(); break;
     case TAB_XY: xy_draw_static(); break;
     case TAB_PANEL: panel_draw_static(); break;
+    case TAB_KEYS: snapshot_bot(); kb_sig = 0xFFFFFFFF; break;
+    case TAB_SONG: snapshot_bot(); sg_sig = 0xFFFFFFFF; break;
     default:
         gfx_well(fb_bot, code_x(0) - 6, 110, code_x(11) - code_x(0) + 22, 26, COL_LCD);
         gfx_rivet(fb_bot, 248, 30);
@@ -782,6 +1088,8 @@ static void tab_touch(int phase)
     case TAB_LIVE: live_touch(phase); break;
     case TAB_XY: xy_touch(phase); break;
     case TAB_PANEL: panel_touch(phase); break;
+    case TAB_KEYS: kb_touch(phase); break;
+    case TAB_SONG: sg_touch(phase); break;
     default: gen_touch(phase); break;
     }
 }
@@ -809,6 +1117,8 @@ void ui_frame(uint32_t down, uint32_t held)
         case TAB_LIVE: live_keys(down, held, rep); break;
         case TAB_XY: xy_keys(down, held, rep); break;
         case TAB_PANEL: panel_keys(down, held, rep); break;
+        case TAB_KEYS: kb_keys(down, held, rep); break;
+        case TAB_SONG: sg_keys(down, held, rep); break;
         default: gen_keys(down, held, rep); break;
         }
     }
@@ -826,7 +1136,7 @@ void ui_frame(uint32_t down, uint32_t held)
             t_temp = (held & KEY_L) != 0;             /* hold L: temporary drag */
             t_on_tabs = t_y < 23;
             if (t_on_tabs) {
-                uint8_t nt = (uint8_t)(t_x / 64);
+                uint8_t nt = (uint8_t)((t_x - 2) / TAB_W);
                 if (nt < TAB_COUNT && nt != tab) { tab = nt; need_full = 1; }
             } else tab_touch(0);
         } else if (!t_on_tabs) {
@@ -838,11 +1148,13 @@ void ui_frame(uint32_t down, uint32_t held)
         if (!t_on_tabs) tab_touch(2);
     }
 
-    if (need_full) { need_full = 0; enter_tab(); }
+    if (need_full) { need_full = 0; if (tab != TAB_KEYS) kb_release(); enter_tab(); }
     switch (tab) {
     case TAB_LIVE: live_frame(); break;
     case TAB_XY: xy_frame(); break;
     case TAB_PANEL: panel_frame(); break;
+    case TAB_KEYS: kb_frame(); break;
+    case TAB_SONG: sg_frame(); break;
     default: gen_frame(); break;
     }
 }
