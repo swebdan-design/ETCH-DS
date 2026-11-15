@@ -29,7 +29,8 @@ Milestone 1 only proves the sound. These ideas came up while building it. None o
 
 ## UI
 
-* **Still to build.** FILE (saves on the SD card; the save format is waiting on a decision) and PANEL's patch cables.
+* **Still to build.** PANEL's patch cables.
+* **FILE extras.** Renaming a project (saves keep the project's name), copying a slot, and exporting back to a Game Boy `.sav`.
 * **KEYS as CORRODE material.** Captured KEYS input could feed CORRODE, as the brief describes.
 * **XY motion recording** (the trail already exists).
 * **Step probability and conditions** in LIVE. ETCH edits them on its TRACK screen.

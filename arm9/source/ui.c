@@ -25,11 +25,12 @@
 #include "app.h"
 #include "audio.h"
 #include "dsp_tables.h"
+#include "storage.h"
 
 enum { TAB_LIVE, TAB_XY, TAB_PANEL, TAB_KEYS, TAB_GEN, TAB_SONG, TAB_COUNT };
 static const char * const tab_names[TAB_COUNT] = { "LIVE", "XY", "PANEL", "KEYS", "GEN", "SONG" };
 #define TAB_W 42
-static uint8_t tab = TAB_LIVE, need_full = 1;
+static uint8_t tab = TAB_LIVE, need_full = 1, sg_page;   /* sg_page 1: FILE */
 uint8_t ui_stress;
 static uint32_t frame;
 
@@ -57,10 +58,11 @@ static void draw_tabs(void)
 {
     int i;
     for (i = 0; i < TAB_COUNT; i++) {
-        int x = 2 + i * TAB_W, len = (int)strlen(tab_names[i]), act = i == tab;
+        const char *nm = (i == TAB_SONG && sg_page) ? "FILE" : tab_names[i];
+        int x = 2 + i * TAB_W, len = (int)strlen(nm), act = i == tab;
         gfx_button(fb_bot, x, 1, TAB_W - 1, 20, act);
         gfx_rect(fb_bot, x + 4, 17, TAB_W - 9, 2, act ? COL_AMBER : C(4, 3, 2));    /* lit bar */
-        txt(&con_bot, 1, (x + TAB_W / 2 - len * 4 + 3) / 8, act ? T_HOT : T_BRIGHT, "%s", tab_names[i]);
+        txt(&con_bot, 1, (x + TAB_W / 2 - len * 4 + 3) / 8, act ? T_HOT : T_BRIGHT, "%s", nm);
     }
     gfx_hazard(fb_bot, 0, 22, 256, 3);
 }
@@ -1056,6 +1058,172 @@ static void sg_keys(uint32_t down, uint32_t held, uint32_t rep)
     }
 }
 
+/* ================================= FILE ==================================== */
+/* The SONG tab's second page (tap the SONG tab again).  16 save slots in one
+ * file on the SD card, and ETCH Game Boy saves to import.  LOAD, ERASE and
+ * overwriting a full slot ask twice; loading jumps to LIVE and plays. */
+static uint8_t fl_src, fl_sel, fl_area, fl_btn, fl_arm = 0xFF, fl_arm_t, fl_valid;
+static uint8_t fl_status[DS_SLOTS], fl_last = SAVE_NONE;
+static char fl_names[DS_SLOTS][PROJECT_NAME_LEN + 1];
+static char fl_msg[33];
+static uint8_t fl_msg_t, fl_msg_col;
+static uint32_t fl_sig = 0xFFFFFFFF;
+
+static void fl_say(int col, const char *m) { strncpy(fl_msg, m, 32); fl_msg[32] = 0; fl_msg_t = 180; fl_msg_col = (uint8_t)col; }
+
+static void fl_refresh(void)
+{
+    int i, n = fl_src ? GB_SLOTS : DS_SLOTS;
+    memset(fl_status, 0, sizeof fl_status);
+    if (app_card)
+        for (i = 0; i < n; i++) {
+            memset(fl_names[i], 0, sizeof fl_names[i]);
+            fl_status[i] = fl_src ? storage_gb_status((uint8_t)i, fl_names[i]) : storage_slot_status((uint8_t)i, fl_names[i]);
+        }
+    fl_last = (app_card && !fl_src) ? storage_last_slot() : SAVE_NONE;
+    fl_valid = 1;
+}
+
+static const char * const fl_btn_ds[4] = { "SAVE", "LOAD", "ERASE", "GB" };
+static const char * const fl_btn_gb[4] = { "IMPORT", "", "", "DS" };
+
+static void fl_draw(void)
+{
+    int i, n = fl_src ? GB_SLOTS : DS_SLOTS;
+    restore_bot(0, 25, 256, 167);
+    if (!app_card) {
+        txt(&con_bot, 8, 3, T_HOT, "NO SD CARD FOUND (DLDI)");
+        txt(&con_bot, 10, 3, T_DIM, "SAVES NEED A CARD THAT");
+        txt(&con_bot, 11, 3, T_DIM, "BOOTS HOMEBREW WITH DLDI");
+        return;
+    }
+    txt(&con_bot, 3, 0, T_DIM, fl_src ? "ETCH GAME BOY SAVES (IMPORT)" : "SAVE SLOTS  /ETCH_DS/");
+    for (i = 0; i < n; i++) {
+        int x = (i >> 3) * 128, y = 34 + (i & 7) * 16, sel = fl_area == 0 && fl_sel == i;
+        gfx_well(fb_bot, x + 2, y - 1, 124, 14, fl_status[i] == SLOT_OK ? C(3, 2, 1) : COL_LCD);
+        if (sel) gfx_frame(fb_bot, x + 1, y - 2, 126, 16, COL_SULFUR);
+        if (fl_status[i] == SLOT_OK) {
+            txt(&con_bot, (y >> 3), (x >> 3) + 1, T_HOT, "%02d", i + 1);
+            txt(&con_bot, (y >> 3), (x >> 3) + 4, T_BRIGHT, "%-10.10s", fl_names[i]);
+            if (i == fl_last) gfx_led(fb_bot, x + 120, y + 6, 1, COL_ACID);
+        } else {
+            txt(&con_bot, (y >> 3), (x >> 3) + 1, T_DIM, "%02d", i + 1);
+            txt(&con_bot, (y >> 3), (x >> 3) + 4, fl_status[i] == SLOT_BAD ? T_HOT : T_DIM,
+                fl_status[i] == SLOT_BAD ? "DAMAGED   " : "--        ");
+        }
+    }
+    if (fl_src) {
+        txt(&con_bot, 5, 17, T_DIM, "COPY THE GB");
+        txt(&con_bot, 6, 17, T_DIM, "CARTRIDGE'S");
+        txt(&con_bot, 7, 17, T_DIM, ".SAV TO");
+        txt(&con_bot, 9, 17, T_SULFUR, "/ETCH_DS/");
+        txt(&con_bot, 10, 17, T_SULFUR, "ETCH_GB.SAV");
+    }
+    for (i = 0; i < 4; i++) {
+        const char *nm = fl_src ? fl_btn_gb[i] : fl_btn_ds[i];
+        int x = 2 + i * 63, armed = fl_arm == i && (fl_arm_t & 8);
+        if (!nm[0]) continue;
+        gfx_button(fb_bot, x, 162, 60, 20, armed);
+        if (i < 3) gfx_led(fb_bot, x + 8, 172, fl_arm == i, i == 2 ? C(31, 6, 2) : COL_AMBER);
+        if (fl_area == 1 && fl_btn == i) gfx_frame(fb_bot, x - 1, 161, 62, 22, COL_SULFUR);
+        txt(&con_bot, 21, (x + 34) / 8 - (int)strlen(nm) / 2, T_BRIGHT, "%s", nm);
+    }
+    if (fl_msg_t) txt(&con_bot, 23, 0, fl_msg_col, "%-31.31s", fl_msg);
+}
+
+static void fl_action(int b)
+{
+    char m[40];
+    uint8_t s = fl_sel;
+    if (!app_card) return;
+    if (b == 3) { fl_src ^= 1; fl_sel = 0; fl_arm = 0xFF; fl_refresh(); return; }
+    if (fl_src) {                                      /* IMPORT */
+        if (b != 0) return;
+        if (fl_status[s] != SLOT_OK) { fl_say(T_HOT, "NOTHING TO IMPORT THERE"); return; }
+        if (fl_arm != 0) { fl_arm = 0; fl_arm_t = 120; fl_say(T_SULFUR, "IMPORT REPLACES YOUR SONG: AGAIN"); return; }
+        fl_arm = 0xFF;
+        if (app_import_gb(s)) { fl_say(T_ACID, "IMPORTED FROM GAME BOY"); tab = TAB_LIVE; sg_page = 0; need_full = 1; }
+        else fl_say(T_HOT, "IMPORT FAILED");
+        return;
+    }
+    if (b == 0) {                                      /* SAVE */
+        if (fl_status[s] == SLOT_OK && fl_arm != 0) {
+            fl_arm = 0; fl_arm_t = 120;
+            sprintf(m, "OVERWRITE %02d? PRESS AGAIN", s + 1); fl_say(T_SULFUR, m); return;
+        }
+        fl_arm = 0xFF;
+        if (app_save_slot(s)) { sprintf(m, "SAVED TO %02d, VERIFIED", s + 1); fl_say(T_ACID, m); }
+        else fl_say(T_HOT, "SAVE FAILED: CARD ERROR");
+        fl_refresh();
+    } else if (b == 1) {                               /* LOAD */
+        if (fl_status[s] != SLOT_OK) { fl_say(T_HOT, fl_status[s] == SLOT_BAD ? "DAMAGED: NOT LOADED" : "EMPTY SLOT"); return; }
+        if (fl_arm != 1) { fl_arm = 1; fl_arm_t = 120; sprintf(m, "LOAD %02d? PRESS AGAIN", s + 1); fl_say(T_SULFUR, m); return; }
+        fl_arm = 0xFF;
+        if (app_load_slot(s)) { fl_say(T_ACID, "LOADED"); tab = TAB_LIVE; sg_page = 0; need_full = 1; }
+        else fl_say(T_HOT, "LOAD FAILED");
+    } else if (b == 2) {                               /* ERASE */
+        if (fl_status[s] == SLOT_EMPTY) return;
+        if (fl_arm != 2) { fl_arm = 2; fl_arm_t = 120; sprintf(m, "ERASE %02d? PRESS AGAIN", s + 1); fl_say(T_SULFUR, m); return; }
+        fl_arm = 0xFF;
+        if (storage_erase(s)) { sprintf(m, "ERASED %02d", s + 1); fl_say(T_TEXT, m); }
+        else fl_say(T_HOT, "ERASE FAILED");
+        fl_refresh();
+    }
+}
+
+static void fl_frame(void)
+{
+    uint32_t sig;
+    if (!fl_valid) fl_refresh();
+    if (fl_arm_t && !--fl_arm_t) fl_arm = 0xFF;
+    if (fl_msg_t) fl_msg_t--;
+    sig = fl_sel * 7u + fl_area * 131u + fl_btn * 17u + (fl_arm + 1) * 19u + ((fl_arm_t >> 3) & 1) * 23u +
+          fl_src * 29u + (fl_msg_t != 0) * 31u + fl_last * 37u + (uint32_t)fl_msg[0] * 41u + (uint32_t)fl_msg[6] * 43u;
+    {
+        int i;
+        for (i = 0; i < DS_SLOTS; i++) sig = sig * 3 + fl_status[i] + (uint8_t)fl_names[i][0];
+    }
+    if (sig != fl_sig) { fl_draw(); fl_sig = sig; }
+}
+
+static void fl_touch(int phase)
+{
+    int n = fl_src ? GB_SLOTS : DS_SLOTS;
+    if (phase != 0) return;
+    if (t_y >= 32 && t_y < 32 + 128) {
+        int i = (t_x / 128) * 8 + (t_y - 32) / 16;
+        if (i < n) { if (i != fl_sel) fl_arm = 0xFF; fl_sel = (uint8_t)i; fl_area = 0; }
+    } else if (t_y >= 162 && t_y < 182) {
+        int b = (t_x - 2) / 63;
+        if (b > 3) b = 3;
+        fl_area = 1; fl_btn = (uint8_t)b;
+        fl_action(b);
+    }
+}
+
+static void fl_keys(uint32_t down, uint32_t held, uint32_t rep)
+{
+    int n = fl_src ? GB_SLOTS : DS_SLOTS;
+    if (held & KEY_A) {
+        if (down & KEY_A) {
+            if (fl_area == 1) fl_action(fl_btn);
+            else if (held & KEY_B) { fl_btn = 2; fl_action(2); }      /* B + A: erase */
+            else { fl_area = 1; fl_btn = 1; }                          /* A on a slot: to LOAD */
+        }
+        return;
+    }
+    if (fl_area == 0) {
+        if ((rep & KEY_UP) && fl_sel > 0) { fl_sel--; fl_arm = 0xFF; }
+        if (rep & KEY_DOWN) { if (fl_sel + 1 < n && (fl_sel & 7) != 7) { fl_sel++; fl_arm = 0xFF; } else fl_area = 1; }
+        if ((rep & KEY_RIGHT) && fl_sel + 8 < n) { fl_sel += 8; fl_arm = 0xFF; }
+        if ((rep & KEY_LEFT) && fl_sel >= 8) { fl_sel -= 8; fl_arm = 0xFF; }
+    } else {
+        if ((rep & KEY_LEFT) && fl_btn > 0) fl_btn--;
+        if ((rep & KEY_RIGHT) && fl_btn < 3) fl_btn++;
+        if (rep & KEY_UP) fl_area = 0;
+    }
+}
+
 /* =============================== dispatch ================================= */
 static void enter_tab(void)
 {
@@ -1072,7 +1240,7 @@ static void enter_tab(void)
     case TAB_XY: xy_draw_static(); break;
     case TAB_PANEL: panel_draw_static(); break;
     case TAB_KEYS: snapshot_bot(); kb_sig = 0xFFFFFFFF; break;
-    case TAB_SONG: snapshot_bot(); sg_sig = 0xFFFFFFFF; break;
+    case TAB_SONG: snapshot_bot(); sg_sig = 0xFFFFFFFF; fl_sig = 0xFFFFFFFF; fl_valid = 0; break;
     default:
         gfx_well(fb_bot, code_x(0) - 6, 110, code_x(11) - code_x(0) + 22, 26, COL_LCD);
         gfx_rivet(fb_bot, 248, 30);
@@ -1089,7 +1257,7 @@ static void tab_touch(int phase)
     case TAB_XY: xy_touch(phase); break;
     case TAB_PANEL: panel_touch(phase); break;
     case TAB_KEYS: kb_touch(phase); break;
-    case TAB_SONG: sg_touch(phase); break;
+    case TAB_SONG: if (sg_page) fl_touch(phase); else sg_touch(phase); break;
     default: gen_touch(phase); break;
     }
 }
@@ -1108,8 +1276,16 @@ void ui_frame(uint32_t down, uint32_t held)
 
     /* ---- global buttons ---------------------------------------------- */
     if (held & KEY_SELECT) {
-        if (down & KEY_LEFT) { tab = (uint8_t)((tab + TAB_COUNT - 1) % TAB_COUNT); need_full = 1; }
-        if (down & KEY_RIGHT) { tab = (uint8_t)((tab + 1) % TAB_COUNT); need_full = 1; }
+        if (down & KEY_LEFT) {
+            if (tab == TAB_SONG && sg_page) sg_page = 0;
+            else { tab = (uint8_t)((tab + TAB_COUNT - 1) % TAB_COUNT); if (tab == TAB_SONG) sg_page = 1; }
+            need_full = 1;
+        }
+        if (down & KEY_RIGHT) {
+            if (tab == TAB_SONG && !sg_page) sg_page = 1;
+            else { tab = (uint8_t)((tab + 1) % TAB_COUNT); sg_page = 0; }
+            need_full = 1;
+        }
         if (down & KEY_A) app_evolve();
         if (down & KEY_B) app_undo();
     } else {
@@ -1118,7 +1294,7 @@ void ui_frame(uint32_t down, uint32_t held)
         case TAB_XY: xy_keys(down, held, rep); break;
         case TAB_PANEL: panel_keys(down, held, rep); break;
         case TAB_KEYS: kb_keys(down, held, rep); break;
-        case TAB_SONG: sg_keys(down, held, rep); break;
+        case TAB_SONG: if (sg_page) fl_keys(down, held, rep); else sg_keys(down, held, rep); break;
         default: gen_keys(down, held, rep); break;
         }
     }
@@ -1137,7 +1313,8 @@ void ui_frame(uint32_t down, uint32_t held)
             t_on_tabs = t_y < 23;
             if (t_on_tabs) {
                 uint8_t nt = (uint8_t)((t_x - 2) / TAB_W);
-                if (nt < TAB_COUNT && nt != tab) { tab = nt; need_full = 1; }
+                if (nt < TAB_COUNT && nt != tab) { tab = nt; sg_page = 0; need_full = 1; }
+                else if (nt == TAB_SONG && tab == TAB_SONG) { sg_page ^= 1; need_full = 1; }
             } else tab_touch(0);
         } else if (!t_on_tabs) {
             if (t_x - t_sx > 2 || t_sx - t_x > 2 || t_y - t_sy > 2 || t_sy - t_y > 2) t_moved = 1;
@@ -1154,7 +1331,7 @@ void ui_frame(uint32_t down, uint32_t held)
     case TAB_XY: xy_frame(); break;
     case TAB_PANEL: panel_frame(); break;
     case TAB_KEYS: kb_frame(); break;
-    case TAB_SONG: sg_frame(); break;
+    case TAB_SONG: if (sg_page) fl_frame(); else sg_frame(); break;
     default: gen_frame(); break;
     }
 }

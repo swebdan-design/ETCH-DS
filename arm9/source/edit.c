@@ -12,6 +12,8 @@
 #include <string.h>
 #include "corrosion.h"
 #include "app.h"
+#include "audio.h"
+#include "storage.h"
 
 static uint32_t sent_replace;
 
@@ -139,4 +141,78 @@ uint8_t app_pattern_empty(uint8_t pat)
     uint8_t l;
     for (l = 0; l < NUM_LANES; l++) if (p->drum[l]) return 0;
     return pattern_note_count(p) == 0;
+}
+
+/* ---- FILE: save / load / import ------------------------------------------- */
+static void snapshot_project(project_t *out)
+{
+    project_t again;
+    int tries;
+    for (tries = 0; tries < 4; tries++) {          /* a commit may land mid-copy */
+        memcpy(out, &SH->proj, sizeof *out);
+        memcpy(&again, &SH->proj, sizeof again);
+        if (!memcmp(out, &again, sizeof again)) return;
+    }
+}
+
+uint8_t app_save_slot(uint8_t slot)
+{
+    project_t p;
+    ds_ext_t x;
+    memset(&x, 0, sizeof x);
+    snapshot_project(&p);
+    x.acid = acid_p;
+    x.fx = fx_p;
+    memcpy(x.drum_tune, foundry_tune, DS_LANES);
+    memcpy(x.drum_decay, foundry_decay, DS_LANES);
+    memcpy(x.drum_level, foundry_level, DS_LANES);
+    return storage_save(slot, &p, &x);
+}
+
+/* Replace the working project: stop, let the ARM7 go quiet, swap, restart
+ * (ETCH: loading jumps to LIVE and plays). */
+static void apply_project(const project_t *p, const ds_ext_t *x)
+{
+    uint32_t spin = 0, t;
+    app_send(CMD(CMD_STOP, 0));
+    while (SH->playing && ++spin < 4000000u) { }
+    t = SH->blk_played;
+    spin = 0;
+    while (SH->blk_played < t + 3 && ++spin < 4000000u) { }
+    memcpy(&SH->proj, p, sizeof *p);
+    if (x) {
+        acid_p = x->acid;
+        fx_p = x->fx;
+        memcpy(foundry_tune, x->drum_tune, DS_LANES);
+        memcpy(foundry_level, x->drum_level, DS_LANES);
+    } else {
+        demo_import_sound(p);                        /* ETCH GB: coarse -> ACID */
+    }
+    fx_p.bpm = p->synth.bpm;
+    anchors_forget(0xFF);
+    app_send(CMD(CMD_EDITED, 0xFF));                 /* new epochs, no undo */
+    app_send(CMD(CMD_TEMPO, 0));
+    app_send(CMD(CMD_QUEUE, p->start_pattern < NUM_PATTERNS ? p->start_pattern : 0));
+    {
+        uint16_t e = (uint16_t)(ui_entropy ^ hw_noise());
+        evo_seed(e);
+        app_send(CMD(CMD_START, e));
+    }
+}
+
+uint8_t app_load_slot(uint8_t slot)
+{
+    static project_t p;
+    ds_ext_t x;
+    if (!storage_load(slot, &p, &x)) return 0;
+    apply_project(&p, &x);
+    return 1;
+}
+
+uint8_t app_import_gb(uint8_t slot)
+{
+    static project_t p;
+    if (!storage_gb_load(slot, &p)) return 0;
+    apply_project(&p, NULL);
+    return 1;
 }

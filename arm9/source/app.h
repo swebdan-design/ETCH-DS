@@ -32,6 +32,10 @@ void     app_chain(uint8_t pos, uint8_t pat, uint8_t rep);
 void     app_song(uint8_t on);
 void     app_jump(uint8_t pos);
 uint8_t  app_pattern_empty(uint8_t pat);
+uint8_t  app_save_slot(uint8_t slot);
+uint8_t  app_load_slot(uint8_t slot);
+uint8_t  app_import_gb(uint8_t slot);
+extern uint8_t app_card;             /* SD card ready */
 void     app_generate(uint8_t what);
 uint16_t app_regen(uint8_t what);
 void     app_fill(void);

@@ -19,12 +19,14 @@
 #include <string.h>
 #include "app.h"
 #include "audio.h"
+#include "storage.h"
 
 static shared_t shared_store __attribute__((aligned(32)));
 static int16_t ring_l[AUDIO_RING] __attribute__((aligned(32)));
 static int16_t ring_r[AUDIO_RING] __attribute__((aligned(32)));
 
 shared_t *SH;
+uint8_t app_card;
 volatile uint16_t ui_entropy;
 static uint32_t rendered;            /* blocks [0, rendered) are done */
 
@@ -129,6 +131,7 @@ int main(int argc, char **argv)
     fifoSendAddress(FIFO_ETCH_INIT, &shared_store);
     while (!fifoCheckValue32(FIFO_ETCH_INIT)) swiWaitForVBlank();
     fifoGetValue32(FIFO_ETCH_INIT);
+    app_card = storage_init();                /* audio is already running */
 
     while (1) {
         uint32_t down, held;

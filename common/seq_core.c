@@ -391,7 +391,13 @@ void seq_command(uint32_t v)
         break;
     case CMD_EDITED:
         if (arg < NUM_PATTERNS) S->pat_epoch[arg]++;
-        else { uint8_t i; for (i = 0; i < NUM_PATTERNS; i++) S->pat_epoch[i]++; }
+        else {                                         /* a new project */
+            uint8_t i;
+            for (i = 0; i < NUM_PATTERNS; i++) S->pat_epoch[i]++;
+            S->evo_undo_pat = 0xFF;
+            S->queued = 0xFF;
+            S->chain_pos = 0;
+        }
         S->evo_state = EVO_IDLE;
         break;
     case CMD_EVO_DROP:

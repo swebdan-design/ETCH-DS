@@ -70,6 +70,7 @@ The audio ring (2 × 512 int16) is also in main RAM. The ARM9 writes it through 
 * `CMD_REPLACE` for whole-pattern operations such as GEN and REGEN. The ARM9 writes the new pattern into `edit_pat` and waits for `edit_ack` before reusing that buffer.
 * `CMD_FILL` (one-shot, latch on/off, fresh masks each bar), `CMD_EVOLVE` and `CMD_MUTES`.
 * `CMD_QUEUE`, `CMD_CHAIN`, `CMD_SONG` and `CMD_JUMP` (SONG tab).
+* `CMD_EDITED(0xFF)` after a project load.
 
 KEYS doesn't go through the ARM7. Live notes go from the main loop to the ARM9 render interrupt through a small ring (`live_note` in `render.arm.c`). While a key is held, the sequencer's bass events are ignored.
 
@@ -100,6 +101,17 @@ Files:
 * `edit.c`: the editing actions
 
 The GUI runs in the main loop. It cannot delay audio, and a 2-minute melonDS run with all tabs in use had 0 dropouts.
+
+## 5b. Saves (`storage.c`)
+
+The format was chosen by the project owner: one file of fixed slots, mirroring ETCH's SRAM. `/etch_ds/etch_ds.sav` holds 16 slots of 16 KB followed by a 16-byte metadata block (the last slot used).
+
+* **Slot layout.** A header `"ETDS"` | version | 0 | 0 0 | size LE32 | Fletcher-16 LE16 | 0 0, then the data.
+* **Data.** ETCH's `project_t` image, followed by `ds_ext_t` (ACID, FX and FOUNDRY settings, with spare bytes).
+* **Write order.** As ETCH: invalidate, write the data, checksum the bytes read back from the card, write the header, write the magic last, verify. Every phase closes the file, so FAT's cache reaches the card in that order.
+* **Loading.** The ARM9 stops playback, waits for the ARM7 to go quiet, swaps the project into the shared block, sends `CMD_EDITED(0xFF)` (new epochs, undo cleared, chain reset), then restarts.
+* **ETCH Game Boy import.** `/etch_ds/etch_gb.sav` is read with ETCH's own slot layout and checksum (bit-exact with its assembly). v1 slots get default drum voicing.
+* **Tests.** `tests/host/test_storage.c` covers the round trip, an interrupted save, corruption, erase, the last-slot marker and GB import (v1 and v2). The melonDS harness gives the console an SD card (`ETCH_SD=image`) for end-to-end runs.
 
 ## 6. Memory map (milestone 1)
 

@@ -8,13 +8,15 @@ ENGINE := ../../arm9/source/acid.arm.c ../../arm9/source/foundry.arm.c ../../arm
 OUT    := ../../build/host
 
 .PHONY: all
-all: $(OUT)/test_generator $(OUT)/test_seq $(OUT)/test_dsp
+all: $(OUT)/test_generator $(OUT)/test_seq $(OUT)/test_dsp $(OUT)/test_storage
 	@echo "== ETCH's CORROSION tests (tests/test_generator.c, unmodified) against corrosion/ =="
 	@$(OUT)/test_generator | tail -1
 	@echo "== sequencer core =="
 	@$(OUT)/test_seq
 	@echo "== sound engine =="
 	@cd $(OUT) && ./test_dsp
+	@echo "== save file =="
+	@cd $(OUT) && ./test_storage
 
 $(OUT)/test_generator: test_generator.c $(CORR)
 	@mkdir -p $(OUT)
@@ -27,3 +29,7 @@ $(OUT)/test_seq: test_seq.c ../../common/seq_core.c $(CORR)
 $(OUT)/test_dsp: test_dsp.c ../../common/seq_core.c $(ENGINE) $(CORR)
 	@mkdir -p $(OUT)
 	$(HOSTCC) $(CFLAGS) -o $@ $^ -lm
+
+$(OUT)/test_storage: test_storage.c ../../arm9/source/storage.c $(CORR)
+	@mkdir -p $(OUT)
+	$(HOSTCC) $(CFLAGS) -o $@ $^

@@ -15,6 +15,7 @@
  *   F:TOUCH:X,Y,N   touch the bottom screen at X,Y for N frames
  *   F:SHOT      screenshot after frame F
  *   F:DUMP      print every watched symbol
+ * env ETCH_SD=path gives the console an SD card (FAT image, DLDI)
  * symbols: ';'-separated name=hexaddr:size (main RAM addresses from nm)
  */
 #include <cstdio>
@@ -38,6 +39,7 @@
 #include "SPU.h"
 #include "Platform.h"
 #include "Args.h"
+#include "FATStorage.h"
 
 using namespace melonDS;
 
@@ -47,8 +49,12 @@ void SignalStop(StopReason, void*) {}
 std::string GetLocalFilePath(const std::string& f) { return f; }
 FileHandle* OpenFile(const std::string& path, FileMode mode)
 {
-    const char* m = (mode & FileMode::Write) ? ((mode & FileMode::Preserve) ? "r+b" : "w+b") : "rb";
-    return (FileHandle*)fopen(path.c_str(), m);
+    if (!(mode & FileMode::Write)) return (FileHandle*)fopen(path.c_str(), "rb");
+    if (mode & FileMode::Preserve) {
+        FILE* f = fopen(path.c_str(), "r+b");
+        if (f || (mode & FileMode::NoCreate)) return (FileHandle*)f;
+    }
+    return (FileHandle*)fopen(path.c_str(), "w+b");
 }
 FileHandle* OpenLocalFile(const std::string& path, FileMode mode) { return OpenFile(path, mode); }
 bool FileExists(const std::string& name) { FILE* f = fopen(name.c_str(), "rb"); if (f) fclose(f); return f != nullptr; }
@@ -234,10 +240,17 @@ int main(int argc, char** argv)
     args.OutputSampleRate = 16756991.0 / 512.0;
     auto nds = std::make_unique<NDS>(std::move(args), nullptr);
     nds->SetRenderer(std::make_unique<SoftRenderer>(*nds));
-    auto cart = NDSCart::ParseROM(std::move(romdata), (u32)rom.size(), nullptr, std::nullopt);
+    /* ETCH_SD=path: a FAT SD card image behind melonDS's DLDI (created if missing) */
+    std::optional<NDSCart::NDSCartArgs> cargs = std::nullopt;
+    if (const char* sd = getenv("ETCH_SD")) {
+        NDSCart::NDSCartArgs a;
+        a.SDCard = FATStorageArgs{ std::string(sd), 64ull << 20, false, std::nullopt };
+        cargs = std::move(a);
+    }
+    auto cart = NDSCart::ParseROM(std::move(romdata), (u32)rom.size(), nullptr, std::move(cargs));
     if (!cart) { fprintf(stderr, "bad ROM\n"); return 1; }
-    nds->Reset();
     nds->SetNDSCart(std::move(cart));
+    nds->Reset();                       /* after the cart: applies the DLDI patch */
     nds->SetupDirectBoot(std::string("etch_ds.nds"));
     nds->Start();
 

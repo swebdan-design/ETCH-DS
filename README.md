@@ -30,7 +30,7 @@ The milestone report is [`docs/MILESTONE1_REPORT.md`](docs/MILESTONE1_REPORT.md)
 | PANEL | Knobs for ACID (wave, cutoff, resonance, env mod, decay, accent, slide, drive, drive amount, filter mode, level), BPM, FX drive, delay, comb, and CPU TEST. Patch cables come later. |
 | KEYS | Two octaves of the GEN key and scale only, so there are no wrong notes. ACCENT and SLIDE latches (with SLIDE on, dragging between keys glides). OCT −/+. REC: while playing, a key writes into the step that is sounding; while stopped, it writes step by step, and B + A writes a rest. A held key takes the 303 from the sequencer. |
 | GEN | CORROSION's settings on faders, the seed code on a 7-segment pad (tap above or below a digit), GEN ALL / GEN BASS / DRUMS, and the mutation dial. |
-| SONG | The 32 patterns: tap one to play it from the next bar, or with SONG on, to put it in the selected chain slot. ETCH's 16-slot chain with repeats: tap a slot to select it, tap it again to jump there. SONG on/off, PAT −/+, REP −/+, and COPY (the playing pattern into the next empty one). |
+| SONG / FILE | Tap the SONG tab again for FILE. **SONG:** the 32 patterns: tap one to play it from the next bar, or with SONG on, to put it in the selected chain slot. ETCH's 16-slot chain with repeats: tap a slot to select it, tap it again to jump there. SONG on/off, PAT −/+, REP −/+, and COPY (the playing pattern into the next empty one). **FILE:** 16 save slots on the SD card; LOAD, ERASE and overwrites ask twice. Loading jumps to LIVE and plays. The GB button lists ETCH Game Boy saves to import (read only). |
 
 ## Controls
 
@@ -48,6 +48,18 @@ The milestone report is [`docs/MILESTONE1_REPORT.md`](docs/MILESTONE1_REPORT.md)
 | hold L while dragging | temporary move: it springs back when you let go |
 
 Touch is single-point everywhere, and it is never needed for sound.
+
+## Saves
+
+Projects live in `/etch_ds/etch_ds.sav` on the SD card. The file holds 16 fixed slots of 16 KB, mirroring ETCH's SRAM layout. Each slot is ETCH's `project_t`, byte for byte, plus the DS sound settings, under a header with ETCH's Fletcher-16. Saves use ETCH's write order:
+
+1. invalidate the slot
+2. write the data
+3. checksum what is actually on the card
+4. write the header, with the magic last
+5. read everything back
+
+A damaged or half-written slot is reported and never loaded. To import ETCH Game Boy projects, copy the cartridge's 32 KB `.sav` to `/etch_ds/etch_gb.sav`. Saving needs a flash cart or loader that DLDI-patches homebrew, which most do automatically.
 
 ## Building
 
