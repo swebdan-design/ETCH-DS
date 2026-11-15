@@ -87,11 +87,51 @@ On a New 3DS it becomes fully polyphonic, with a filter per voice.
 
 ### Performance
 
-* **The Circle Pad as a second XY**, free while the touch screen works the first. That gives two-handed tweaking with one touch.
+* **The Circle Pad and C-stick as PUNCH controls** (see below), while the touch screen works the XY pad. That gives two-handed playing with one touch.
 * **The 3D slider as a macro fader** for, say, echo feedback or harmony level. It's a real analogue slider on every 3DS.
 * **Tilt:** a gyro and accelerometer source on the patch panel (tilt to open the filter).
-* **The C-stick and ZL/ZR (New 3DS):** a third XY and extra modifiers.
+* **ZL/ZR (New 3DS):** extra modifiers, such as latching a punch.
 * **Motion lanes:** record knob, XY and tilt moves into the pattern.
+
+### PUNCH — live punch-in effects
+
+Momentary effects you play over the song, in the spirit of a DJ mixer or a Pocket Operator's punch-ins:
+
+* **Push** and the effect starts in time, on the next 16th (or instantly, as a setting).
+* **Let go** and the song snaps back exactly where it would have been, because the sequencer never stops underneath.
+* **Hold ZR as you let go** and the effect latches until you punch again.
+
+Everything works from a **retro buffer**: the last bar of the mix (and of the drum bus on its own) is always being recorded. That costs about 260 KB.
+
+**C-stick: BEAT REPEAT** (New 3DS). Flick a direction to repeat a slice, starting at the punch point:
+
+| Direction | Repeat length |
+|---|---|
+| Up | 1/4 note |
+| Right | 1/8 note |
+| Down | 1/16 note |
+| Left | 1/32 note (a roll) |
+
+* **Target:** the repeat grabs the **drum bus only** by default, so the 303 keeps flowing over the stutter. Hold L to repeat the whole mix.
+* **Variations** (PUNCH settings):
+  * **DECAY:** each repeat is quieter.
+  * **PITCH:** repeats drop like a slowing tape.
+  * **FILTER:** repeats darken.
+  * **REVERSE:** every other repeat plays backwards.
+  * **GROW / SHRINK:** for example 1/4 → 1/8 → 1/16 while held, the classic build into a drop.
+
+**Circle Pad: the PUNCH pad.** Its position is an effects XY. Centred, it does nothing.
+
+* **Left / right:** a DJ filter. Push left to close a resonant low-pass, push right to open a high-pass. How far you push sets the cutoff.
+* **Up:** ECHO THROW. The send rises into a tempo-synced echo; at full push it **freezes** into an infinite loop that keeps corroding (darker and fewer bits on every pass).
+* **Down:** CRUSH. Bit and sample-rate reduction deepen the further you push.
+* **Clicks:** a quick flick and release fires a **one-shot** instead: up is TAPE STOP, down is VINYL BRAKE, left is REVERSE (the last beat, backwards), right is GATE (a tempo-synced chopper for one bar).
+
+**Record it.** Punches can be recorded into a **PUNCH lane** per pattern (16 steps, one effect per step), so a stutter or a filter rise becomes part of the song. Under DRIFT and CORRODE the lane is left alone unless you allow it, in which case CORROSION's evolution can sprinkle punches in (a new, bounded "performer" layer).
+
+**On an Old 3DS** (no C-stick): hold ZL… which it also lacks. So instead, hold **Y** and the Circle Pad switches from the PUNCH pad to BEAT REPEAT, with the same four directions. The Circle Pad Pro accessory adds a second stick.
+
+**Back to ETCH DS.** The DS has the CPU and memory for a reduced PUNCH: a one-bar buffer of about 260 KB, out of the 4 MB of which ETCH DS uses about 0.6 MB. Hold **Y + D-pad** for the four beat repeats, and **X + D-pad** for filter low/high, echo throw and crush. That makes a good first test of the idea before the 3DS exists.
 
 ### The living song in 3D (top screen)
 
@@ -133,7 +173,7 @@ On a New 3DS it becomes fully polyphonic, with a filter per voice.
 
 1. **Port.** ETCH DS on 3DS with an identical sound and the same seed codes and saves, a 400×240 UI, and the Circle Pad as XY.
 2. **OXIDE + VAPOUR.** Chords, the HARMONY tab, DUB TECHNO, and the extended seed codes.
-3. **Performance.** The 3D slider, tilt, the patch panel with the new sources, and motion lanes.
+3. **Performance.** PUNCH (Circle Pad effects pad, C-stick beat repeat, the retro buffer, PUNCH lanes), the 3D slider, tilt, the patch panel with the new sources, and motion lanes. A reduced PUNCH can be tried on ETCH DS first.
 4. **3D landscape and BOUNCE to WAV.**
 5. **Mic sampling, QR sharing, PHOTO SEED.**
 6. **Sync:** local wireless, then Link (after the licence check).
@@ -145,3 +185,5 @@ On a New 3DS it becomes fully polyphonic, with a filter per voice.
 3. **Old 3DS:** must everything run on it? Recommendation: everything except full VAPOUR polyphony, which drops to paraphonic on Old 3DS.
 4. **Distribution:** `.3dsx` only, or `.cia` as well? Recommendation: `.3dsx` first.
 5. **Name:** ETCH 3DS, or ETCH III (the open question from ETCH DS)? Recommendation: ETCH 3DS, keeping "ETCH III" free.
+6. **Beat repeat target:** drums only by default (the 303 keeps flowing), or the whole mix? Recommendation: drums only, with L for everything.
+7. **Should CORROSION add punches by itself** when evolving? Recommendation: an opt-in setting, off by default.
