@@ -84,7 +84,7 @@ Everything on the audio path is integer arithmetic. `tools/check_audio_path.py` 
 |---|---|---|
 | events | `render.arm.c` | Copies the block's slot. Each stage walks the block in 32-sample chunks (the control period) and applies the chunk's events first. |
 | ACID | `acid.arm.c` | Band-limited wavetables (ETCH's SAW/SQUARE/HOLLOW/BITE recipes, 8 mip levels). A 4-pole ladder with cubic saturation in the feedback, 2× oversampled. 303 (no key tracking) or KEY (ETCH) cutoff. Exponential filter envelope; accents snap shut. An accent capacitor that charges on repeated accents, plus ETCH's per-step charge. A constant-time linear slide with the gate held. VCA with a click-free retrigger. Drive OFF/SOFT/HARD/FOLD after the VCA, then a DC blocker. |
-| FOUNDRY | `foundry.arm.c` | Six lanes. Sounds are synthesised from parameters into RAM samples at build time (ETCH's 16 kit sounds plus METAL and NOISE). Playback is a sample player per lane, with varispeed for the tuning drift and closed hat choking open hat. |
+| FOUNDRY | `foundry.arm.c` (editable on the DRUM page) | Six lanes. Sounds are synthesised from parameters into RAM samples at build time (ETCH's 16 kit sounds plus METAL and NOISE). Playback is a sample player per lane, with varispeed for the tuning drift and closed hat choking open hat. |
 | FX | `fx.arm.c` | Drive → crush (sample-and-hold + bit mask) → tempo-synced delay that darkens and loses bits per repeat → comb tuned to a note → limiter with 32-sample look-ahead (ceiling 0.85). |
 
 Formats: oscillator phase is 32 bits per cycle; ACID's signal is Q14 and the ladder states provably stay within ±1.0; the mix bus is int32 at Q15 scale; coefficients are Q16; pitch is in 1/64 semitone. `tools/gen_tables.py` generates every table (wavetables, exponentials, coefficients, reciprocals) into `arm9/source/dsp_tables.c`, which is committed so `make` needs no Python.
@@ -108,12 +108,23 @@ Files:
 
 The GUI runs in the main loop and cannot delay audio. A melonDS run with all tabs in use had 0 dropouts.
 
+## 5a. Editing drums (DRUM page)
+
+Each kit slot is a `drum_def_t`: a model and its pitch, pitch end, sweep, decay, noise and drive. The definitions live in RAM (`foundry_defs`), initialised from ETCH's presets.
+
+* **Re-synthesis.** An edit re-renders that sound in the main loop with `foundry_rebuild`. It renders into a new buffer first. Then, with interrupts off for a few instructions, it swaps the buffer in and silences any voice still on the old one, and only after that frees the old buffer. The render interrupt therefore never reads freed memory.
+* **Rate.** While dragging, sounds re-render at most every 10 frames, and again on release.
+* **Tune and level.** These act at playback, at once, and are mirrored into ETCH's per-lane `drum_tune` and `drum_level`.
+* **KIT.** Changing the kit edits the playing pattern's kit (`CMD_SET_KIT`).
+* **Audition.** Lanes are auditioned through the live-note ring (`EV_DRUMS`).
+* **Measured.** In melonDS, 10 s of continuous re-rendering of the longest sound while playing gave 0 dropouts and 0 late gates.
+
 ## 5b. Saves (`storage.c`)
 
 The format was chosen by the project owner: one file of fixed slots, mirroring ETCH's SRAM. `/etch_ds/etch_ds.sav` holds 16 slots of 16 KB followed by a 16-byte metadata block (the last slot used).
 
 * **Slot layout.** A header `"ETDS"` | version | 0 | 0 0 | size LE32 | Fletcher-16 LE16 | 0 0, then the data.
-* **Data.** ETCH's `project_t` image, followed by `ds_ext_t` (ACID, FX and FOUNDRY settings, with spare bytes).
+* **Data.** ETCH's `project_t` image, followed by `ds_ext_t`: ACID, FX and FOUNDRY settings, then, from save version 2, the 16 drum designs. Version-1 slots still load and get ETCH's preset drums.
 * **Write order.** As ETCH: invalidate, write the data, checksum the bytes read back from the card, write the header, write the magic last, verify. Every phase closes the file, so FAT's cache reaches the card in that order.
 * **Loading.** The ARM9 stops playback, waits for the ARM7 to go quiet, swaps the project into the shared block, sends `CMD_EDITED(0xFF)` (new epochs, undo cleared, chain reset), then restarts.
 * **ETCH Game Boy import.** `/etch_ds/etch_gb.sav` is read with ETCH's own slot layout and checksum (bit-exact with its assembly). v1 slots get default drum voicing.

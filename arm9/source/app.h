@@ -44,6 +44,8 @@ void     app_fill_frame(void);
 void     app_evolve(void);
 void     app_undo(void);
 void     app_toggle_mute(uint8_t bit);
+void     app_set_kit(uint8_t lane, uint8_t kit);   /* the playing pattern's kit */
+void     app_audition(uint8_t lane, uint8_t kit);
 
 /* main.c: the last audio the ARM9 rendered (for the scope) */
 uint32_t audio_scope(int16_t *out, uint32_t n);

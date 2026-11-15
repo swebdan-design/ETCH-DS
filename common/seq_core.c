@@ -475,6 +475,11 @@ void seq_command(uint32_t v)
         S->queued = 0xFF;
         S->evo_state = EVO_IDLE;
         break;
+    case CMD_SET_KIT: {
+        uint32_t pat = (arg >> 4) & 31, lane = (arg >> 2) & 3;
+        S->proj.pat[pat].kit[lane] = (uint8_t)(arg & 3);
+        edited((uint8_t)pat);
+        break; }
     case CMD_JUMP:                                     /* ETCH's seq_jump_chain */
         arg &= CHAIN_LEN - 1;
         if (S->proj.chain.pat[arg] >= NUM_PATTERNS) break;

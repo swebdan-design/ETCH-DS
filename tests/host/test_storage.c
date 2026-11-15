@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include "storage.h"
 #include "corrosion.h"
 
@@ -81,6 +82,8 @@ int main(void)
     p.synth.bpm = 124;
     memset(&x, 0, sizeof x);
     x.acid.cutoff = 77; x.acid.res = 99; x.fx.dly_mix = 31; x.drum_level[5] = 9;
+    x.has_drums = 1;
+    x.drums[1][2].type = 3; x.drums[1][2].f0 = 1234; x.drums[3][0].amp_ms = 777;   /* edited drums */
     CHECK(storage_save(3, &p, &x), "save slot 4");
     CHECK(storage_slot_status(3, name) == SLOT_OK && !memcmp(name, "CORRODE   ", 10), "status + name");
     CHECK(storage_last_slot() == 3, "last slot remembered");
@@ -102,6 +105,25 @@ int main(void)
     CHECK(storage_last_slot() == SAVE_NONE, "erase forgets last slot");
     for (i = 0; i < DS_SLOTS; i++) { p.name[0] = (char)('A' + i); CHECK(storage_save((uint8_t)i, &p, &x), "fill %d", i); }
     for (i = 0; i < DS_SLOTS; i++) { CHECK(storage_slot_status((uint8_t)i, name) == SLOT_OK && name[0] == 'A' + i, "slot %d", i); }
+
+    /* a version-1 save (before drum designs) still loads, without drums */
+    {
+        FILE *f;
+        uint8_t h[16];
+        static uint8_t data[16384];
+        uint32_t v1 = (uint32_t)(sizeof(project_t) + offsetof(ds_ext_t, drums));
+        uint16_t sum;
+        CHECK(storage_save(2, &p, &x), "save for v1 test");
+        f = fopen(storage_path, "r+b");
+        fseek(f, 2 * 16384L, SEEK_SET); fread(h, 1, 16, f); fread(data, 1, v1, f);
+        sum = fletcher_asm_model(data, v1);
+        h[4] = 1; h[8] = (uint8_t)v1; h[9] = (uint8_t)(v1 >> 8); h[10] = h[11] = 0;
+        h[12] = (uint8_t)sum; h[13] = (uint8_t)(sum >> 8);
+        fseek(f, 2 * 16384L, SEEK_SET); fwrite(h, 1, 16, f); fclose(f);
+        CHECK(storage_slot_status(2, NULL) == SLOT_OK, "v1 slot accepted");
+        CHECK(storage_load(2, &q, &y) && !memcmp(&q, &p, sizeof p) && !y.has_drums &&
+              y.acid.cutoff == 77 && y.drums[1][2].f0 == 0, "v1: project + sound, no drum designs");
+    }
 
     /* ETCH Game Boy .sav: v2 slot, v1 slot (no drum voicing), empty, damaged */
     {

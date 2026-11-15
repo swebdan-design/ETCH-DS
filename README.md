@@ -33,7 +33,7 @@ The milestone report is [`docs/MILESTONE1_REPORT.md`](docs/MILESTONE1_REPORT.md)
 |---|---|
 | LIVE | The pattern, editable. Drag a bass step to set its pitch; tap the note to rest it. Tap the A/S strip under a step to cycle accent and slide. Tap or swipe drum cells. Tap a row name to mute it. The pads are FILL, REGEN, EVOLVE and UNDO. |
 | XY | X sets cutoff and Y sets resonance, with a fading trail and 7-segment readouts. |
-| PANEL | Knobs for ACID (wave, cutoff, resonance, env mod, decay, accent, slide, drive, drive amount, filter mode, level), BPM, FX drive, delay, comb, and CPU TEST. Patch cables come later. |
+| PANEL / DRUM | Tap PANEL again for DRUM. **PANEL:** knobs for ACID (wave, cutoff, resonance, env mod, decay, accent, slide, drive, drive amount, filter mode, level), BPM, FX drive, delay, comb, and CPU TEST. Patch cables come later. **DRUM:** FOUNDRY's drum synth. Pick a lane (tapping it plays it) and shape the sound in the kit slot the playing pattern uses: KIT, MODEL (kick, snare, clap, rim, hat, metal, blip, ring, crush), PITCH, PITCH END, SWEEP, DECAY, NOISE, DRIVE, TUNE and LEVEL, with a waveform view. Each edit re-synthesises the drum while the song plays. Knobs a model doesn't use are dimmed, and RESET restores ETCH's preset. |
 | KEYS | Two octaves of the GEN key and scale only, so there are no wrong notes. ACCENT and SLIDE latches (with SLIDE on, dragging between keys glides). OCT −/+. REC: while playing, a key writes into the step that is sounding; while stopped, it writes step by step, and B + A writes a rest. A held key takes the 303 from the sequencer. |
 | GEN | CORROSION's settings on faders, the seed code on a 7-segment pad (tap above or below a digit), GEN ALL / GEN BASS / DRUMS, and the mutation dial. |
 | SONG / FILE | Tap the SONG tab again for FILE. **SONG:** the 32 patterns: tap one to play it from the next bar, or with SONG on, to put it in the selected chain slot. ETCH's 16-slot chain with repeats: tap a slot to select it, tap it again to jump there. SONG on/off, PAT −/+, REP −/+, and COPY (the playing pattern into the next empty one). **FILE:** 16 save slots on the SD card, plus ABOUT; LOAD, ERASE and overwrites ask twice. Loading jumps to LIVE and plays. The GB button lists ETCH Game Boy saves to import (read only). |
@@ -57,7 +57,7 @@ Touch is single-point everywhere, and it is never needed for sound.
 
 ## Saves
 
-Projects live in `/etch_ds/etch_ds.sav` on the SD card. The file holds 16 fixed slots of 16 KB, mirroring ETCH's SRAM layout. Each slot is ETCH's `project_t`, byte for byte, plus the DS sound settings, under a header with ETCH's Fletcher-16. Saves use ETCH's write order:
+Projects live in `/etch_ds/etch_ds.sav` on the SD card. The file holds 16 fixed slots of 16 KB, mirroring ETCH's SRAM layout. Each slot is ETCH's `project_t`, byte for byte, plus the DS sound settings and your drum designs (save version 2; version-1 saves still load), under a header with ETCH's Fletcher-16. Saves use ETCH's write order:
 
 1. invalidate the slot
 2. write the data

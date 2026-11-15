@@ -95,7 +95,24 @@ typedef struct {
 
 extern int8_t evo_tune_ofs[DS_LANES];
 extern uint8_t foundry_tune[DS_LANES], foundry_decay[DS_LANES], foundry_level[DS_LANES];
-void foundry_build(void);              /* render every kit sound (boot)    */
+/* a drum sound, synthesised from these and rendered to a sample */
+enum { DT_KICK, DT_SNARE, DT_CLAP, DT_RIM, DT_HAT, DT_METALHAT, DT_BLIP, DT_RING, DT_CRUSH, DT_COUNT };
+typedef struct {
+    uint8_t  type;        /* DT_*                                                 */
+    uint16_t f0, f1;      /* Hz: start / end (tones), or the noise colour         */
+    uint16_t pitch_ms;    /* pitch sweep time (attack for hats)                   */
+    uint16_t amp_ms;      /* decay to e^-6                                        */
+    uint8_t  noise;       /* 0..255 noise mix / click / metal amount              */
+    uint8_t  drive;       /* 0..255                                               */
+    uint16_t len_ms;      /* sample length (foundry_set_len)                      */
+} drum_def_t;
+extern const drum_def_t foundry_presets[DS_LANES][KITS_PER_LANE];   /* ETCH's kits */
+extern drum_def_t foundry_defs[DS_LANES][KITS_PER_LANE];            /* edited      */
+extern const char * const foundry_model_names[DT_COUNT];
+void foundry_build(void);              /* render every kit sound (boot, load) */
+void foundry_rebuild(uint32_t lane, uint32_t kit);   /* after an edit (main loop) */
+void foundry_set_len(drum_def_t *d);
+const int16_t *foundry_sample(uint32_t lane, uint32_t kit, uint32_t *len);
 void foundry_trigger(uint8_t lanes, uint8_t kits);
 void foundry_kill(void);
 void foundry_render(int32_t *l, int32_t *r, uint32_t n);
@@ -141,7 +158,8 @@ extern volatile audio_stats_t astats;
 extern const char * const stage_names[ST_COUNT];
 
 /* live notes from the KEYS tab (main loop -> render interrupt): EV_NOTE,
- * EV_GLIDE, EV_GATE_OFF.  While a key is held the sequencer's bass is muted. */
+ * EV_GLIDE, EV_GATE_OFF (while a key is held the sequencer's bass is muted);
+ * EV_DRUMS (lanes, kits) auditions drums from the DRUM page. */
 void live_note(uint8_t type, uint8_t note, uint8_t accent);
 
 /* render one block from its events into out_l/out_r (int16) */

@@ -163,6 +163,8 @@ uint8_t app_save_slot(uint8_t slot)
     snapshot_project(&p);
     x.acid = acid_p;
     x.fx = fx_p;
+    memcpy(x.drums, foundry_defs, sizeof x.drums);
+    x.has_drums = 1;
     memcpy(x.drum_tune, foundry_tune, DS_LANES);
     memcpy(x.drum_decay, foundry_decay, DS_LANES);
     memcpy(x.drum_level, foundry_level, DS_LANES);
@@ -184,10 +186,21 @@ static void apply_project(const project_t *p, const ds_ext_t *x)
         acid_p = x->acid;
         fx_p = x->fx;
         memcpy(foundry_tune, x->drum_tune, DS_LANES);
+        memcpy(foundry_decay, x->drum_decay, DS_LANES);
         memcpy(foundry_level, x->drum_level, DS_LANES);
-    } else {
-        demo_import_sound(p);                        /* ETCH GB: coarse -> ACID */
+        if (x->has_drums) memcpy(foundry_defs, x->drums, sizeof x->drums);   /* save v2 */
+        else memcpy(foundry_defs, foundry_presets, sizeof foundry_defs);
+    } else {                                         /* ETCH GB: coarse -> ACID */
+        uint8_t l;
+        demo_import_sound(p);
+        for (l = 0; l < NUM_LANES; l++) {            /* ETCH's per-lane voicing */
+            foundry_tune[l] = p->drum_tune[l] & 15;
+            foundry_decay[l] = p->drum_decay[l] & 15;
+            foundry_level[l] = p->drum_level[l] & 15;
+        }
+        memcpy(foundry_defs, foundry_presets, sizeof foundry_defs);
     }
+    foundry_build();                                 /* playback is stopped */
     fx_p.bpm = p->synth.bpm;
     anchors_forget(0xFF);
     app_send(CMD(CMD_EDITED, 0xFF));                 /* new epochs, no undo */
@@ -215,4 +228,15 @@ uint8_t app_import_gb(uint8_t slot)
     if (!storage_gb_load(slot, &p)) return 0;
     apply_project(&p, NULL);
     return 1;
+}
+
+void app_set_kit(uint8_t lane, uint8_t kit)
+{
+    app_send(CMD(CMD_SET_KIT, ((uint32_t)SH->cur << 4) | ((uint32_t)(lane & 3) << 2) | (kit & 3)));
+    anchors_forget(SH->cur);
+}
+
+void app_audition(uint8_t lane, uint8_t kit)
+{
+    live_note(EV_DRUMS, (uint8_t)(1u << lane), (uint8_t)((kit & 3) << ((lane & 3) * 2)));
 }

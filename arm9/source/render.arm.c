@@ -94,6 +94,7 @@ static AUDIO_CODE void live_drain(void)
         case EV_NOTE: acid_note(e->a, e->b); live_owns = 1; break;
         case EV_GLIDE: acid_glide(e->a, e->b); live_owns = 1; break;
         case EV_GATE_OFF: acid_gate_off(); live_owns = 0; break;
+        case EV_DRUMS: foundry_trigger(e->a, e->b); break;    /* audition */
         default: break;
         }
         live_tail++;

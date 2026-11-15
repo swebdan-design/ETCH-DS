@@ -17,7 +17,9 @@ const char *storage_gb_path = "/etch_ds/etch_gb.sav";
 #define HDR      16
 #define META_OFF (DS_SLOTS * DS_SLOT_SIZE)
 #define FILE_LEN (META_OFF + 16)
-#define DATA_LEN ((uint32_t)(sizeof(project_t) + sizeof(ds_ext_t)))
+#include <stddef.h>
+#define DATA_LEN    ((uint32_t)(sizeof(project_t) + sizeof(ds_ext_t)))
+#define DATA_LEN_V1 ((uint32_t)(sizeof(project_t) + offsetof(ds_ext_t, drums)))
 
 static uint8_t buf[DS_SLOT_SIZE];
 typedef char data_fits[(DATA_LEN + HDR <= DS_SLOT_SIZE) ? 1 : -1];
@@ -89,6 +91,7 @@ uint8_t storage_init(void)
 }
 
 /* check slot s; on SLOT_OK the slot's data is left in buf */
+static uint32_t checked_size;
 static uint8_t check(uint8_t s)
 {
     uint8_t h[HDR];
@@ -96,9 +99,10 @@ static uint8_t check(uint8_t s)
     if (s >= DS_SLOTS || !rd(storage_path, s * DS_SLOT_SIZE, h, HDR)) return SLOT_EMPTY;
     if (h[0] != 'E' || h[1] != 'T' || h[2] != 'D' || h[3] != 'S') return SLOT_EMPTY;
     size = le32(h + 8);
-    if (h[4] != DS_SAVE_VERSION || size != DATA_LEN) return SLOT_BAD;
+    if (!((h[4] == DS_SAVE_VERSION && size == DATA_LEN) || (h[4] == 1 && size == DATA_LEN_V1))) return SLOT_BAD;
     if (!rd(storage_path, s * DS_SLOT_SIZE + HDR, buf, size)) return SLOT_BAD;
     if (etch_fletcher16(buf, size) != (uint16_t)(h[12] | (h[13] << 8))) return SLOT_BAD;
+    checked_size = size;
     return SLOT_OK;
 }
 
@@ -139,7 +143,9 @@ uint8_t storage_load(uint8_t slot, project_t *p, ds_ext_t *x)
 {
     if (check(slot) != SLOT_OK) return 0;                          /* never half-load */
     memcpy(p, buf, sizeof(project_t));
-    memcpy(x, buf + sizeof(project_t), sizeof(ds_ext_t));
+    memset(x, 0, sizeof *x);
+    memcpy(x, buf + sizeof(project_t), checked_size - sizeof(project_t));
+    x->has_drums = checked_size == DATA_LEN;                       /* v2 */
     return 1;
 }
 

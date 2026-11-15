@@ -93,7 +93,8 @@ enum {
     CMD_QUEUE,        /* arg = pattern: plays from the next bar line (ETCH)   */
     CMD_CHAIN,        /* arg = pos<<16 | pat<<8 | rep  (pat 0xFF = END)       */
     CMD_SONG,         /* arg = 1: follow the chain                            */
-    CMD_JUMP          /* arg = chain position: from the next bar line         */
+    CMD_JUMP,         /* arg = chain position: from the next bar line         */
+    CMD_SET_KIT       /* arg = pat<<4 | lane<<2 | kit                         */
 };
 enum { FILL_ONESHOT, FILL_LATCH_ON, FILL_LATCH_OFF, FILL_UPDATE };
 #define CMD_BASS_ARG(pat, step, note, flags) \

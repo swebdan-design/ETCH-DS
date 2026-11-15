@@ -23,7 +23,7 @@
 
 #define DS_SLOTS        16
 #define DS_SLOT_SIZE    16384u
-#define DS_SAVE_VERSION 1
+#define DS_SAVE_VERSION 2              /* v1 slots (no drum designs) still load */
 #define GB_SLOTS        8
 
 #define SLOT_EMPTY 0
@@ -35,7 +35,10 @@ typedef struct {
     acid_params_t acid;
     fx_params_t   fx;
     uint8_t       drum_tune[DS_LANES], drum_decay[DS_LANES], drum_level[DS_LANES];
-    uint8_t       reserved[14];
+    uint8_t       has_drums;          /* set by storage_load: v2 slot        */
+    uint8_t       reserved[13];
+    /* ---- save version 2 ---- */
+    drum_def_t    drums[NUM_LANES][KITS_PER_LANE];   /* edited drum sounds  */
 } ds_ext_t;
 
 /* paths (the host tests point these elsewhere) */

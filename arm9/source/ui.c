@@ -29,6 +29,7 @@ static const char * const tab_names[TAB_COUNT] = { "LIVE", "XY", "PANEL", "KEYS"
 #define TAB_W  41
 #define TOP_Y  26
 static uint8_t tab = TAB_LIVE, need_full = 1, sg_page;   /* sg_page 1: FILE */
+static uint8_t pn_page;                                   /* pn_page 1: DRUM */
 uint8_t ui_stress;
 static uint32_t frame;
 
@@ -63,7 +64,7 @@ static void draw_tabs(void)
     int i;
     gfx_rect(fb_bot, 0, 0, 256, 24, COL_BG);
     for (i = 0; i < TAB_COUNT; i++) {
-        const char *nm = (i == TAB_SONG && sg_page) ? "FILE" : tab_names[i];
+        const char *nm = (i == TAB_SONG && sg_page) ? "FILE" : (i == TAB_PANEL && pn_page) ? "DRUM" : tab_names[i];
         int cx = TAB_X0 + i * TAB_W + TAB_W / 2, w = gfx_text_w(F_MAIN, nm), act = i == tab;
         gfx_text_c(fb_bot, cx, 7, F_MAIN, act ? COL_TEXT : COL_TEXT3, nm);
         if (act) gfx_rect(fb_bot, cx - w / 2 - 2, 17, w + 4, 2, COL_ACCENT);
@@ -548,6 +549,267 @@ static void panel_keys(uint32_t down, uint32_t held, uint32_t rep)
     if ((rep & KEY_RIGHT) && (knob_cur & 3) < 3) knob_cur++;
     if ((rep & KEY_UP) && knob_cur >= 4) knob_cur -= 4;
     if ((rep & KEY_DOWN) && knob_cur + 4 < K_COUNT) knob_cur += 4;
+}
+
+/* ================================= DRUM ==================================== */
+/* PANEL's second page (tap PANEL again): FOUNDRY's drum synth.  Pick a lane
+ * (tapping it plays it), then shape the sound in the kit slot the playing
+ * pattern uses: KIT, MODEL, PITCH, PITCH END, SWEEP, DECAY, NOISE, DRIVE,
+ * TUNE, LEVEL.  Sound edits re-synthesise the drum in the background (at most
+ * every 10 frames while dragging, and on release) and swap it in safely;
+ * TUNE and LEVEL act at once.  Knobs a model doesn't use are dimmed.  RESET
+ * restores ETCH's preset for that slot. */
+enum { D_KIT, D_MODEL, D_PITCH, D_END, D_SWEEP, D_DECAY, D_NOISE, D_DRIVE, D_TUNE, D_LEVEL, D_COUNT };
+static const char * const dk_names[D_COUNT] = {
+    "KIT", "MODEL", "PITCH", "PITCH END", "SWEEP", "DECAY", "NOISE", "DRIVE", "TUNE", "LEVEL"
+};
+static const char * const dr_lane_names[4] = { "KICK", "SNARE", "HAT", "OPEN" };
+/* knobs each model uses, bit per D_* */
+static const uint16_t dr_uses[DT_COUNT] = {
+    0x3FF,                                                     /* KICK  */
+    0x3FF,                                                     /* SNARE */
+    (1 << D_KIT) | (1 << D_MODEL) | (1 << D_PITCH) | (1 << D_DECAY) | (1 << D_DRIVE) | (3 << D_TUNE),
+    (1 << D_KIT) | (1 << D_MODEL) | (1 << D_PITCH) | (1 << D_END) | (1 << D_DECAY) | (3 << D_TUNE),
+    (1 << D_KIT) | (1 << D_MODEL) | (1 << D_PITCH) | (1 << D_SWEEP) | (1 << D_DECAY) | (1 << D_DRIVE) | (3 << D_TUNE),
+    (1 << D_KIT) | (1 << D_MODEL) | (1 << D_PITCH) | (1 << D_SWEEP) | (1 << D_DECAY) | (1 << D_NOISE) | (1 << D_DRIVE) | (3 << D_TUNE),
+    (1 << D_KIT) | (1 << D_MODEL) | (1 << D_PITCH) | (1 << D_END) | (1 << D_SWEEP) | (1 << D_DECAY) | (3 << D_TUNE),
+    (1 << D_KIT) | (1 << D_MODEL) | (1 << D_PITCH) | (1 << D_END) | (1 << D_DECAY) | (1 << D_NOISE) | (1 << D_DRIVE) | (3 << D_TUNE),
+    (1 << D_KIT) | (1 << D_MODEL) | (1 << D_PITCH) | (1 << D_DECAY) | (1 << D_DRIVE) | (3 << D_TUNE),
+};
+#define DR_X0   6
+#define DR_W    49
+#define DR_KY   48
+#define DR_KH   41
+#define DR_WY   134
+#define DR_WH   34
+static uint8_t dr_lane, dr_cur, dr_area = 1, dr_drag, dr_pending, dr_flash;
+static int dr_start;
+static uint32_t dr_last_build, dr_sig[D_COUNT], dr_head_sig = 0xFFFFFFFF, dr_wave_sig = 0xFFFFFFFF;
+static uint16_t hz_tab[128];
+
+static void dr_tables(void)
+{
+    uint32_t i, hz = 20u << 16;                        /* 20 Hz .. ~12.4 kHz, exponential */
+    for (i = 0; i < 128; i++) { hz_tab[i] = (uint16_t)(hz >> 16); hz = (uint32_t)(((uint64_t)hz * 68916u) >> 16); }
+}
+
+static uint8_t dr_kit(void) { return (uint8_t)(SH->proj.pat[SH->cur].kit[dr_lane] & 3); }
+static drum_def_t *dr_def(void) { return &foundry_defs[dr_lane][dr_kit()]; }
+static int isqrt_i(int v) { int r = 0; while ((r + 1) * (r + 1) <= v) r++; return r; }
+static int dr_hz_v(int hz) { int i; for (i = 0; i < 127 && hz_tab[i + 1] <= hz; i++) { } return i; }
+
+static int dr_is_enum(int k) { return k == D_KIT || k == D_MODEL; }
+static int dr_hi(int k) { return k == D_KIT ? 3 : k == D_MODEL ? DT_COUNT - 1 : k == D_TUNE || k == D_LEVEL ? 15 : 127; }
+
+static int dr_get(int k)
+{
+    const drum_def_t *d = dr_def();
+    switch (k) {
+    case D_KIT: return dr_kit();
+    case D_MODEL: return d->type;
+    case D_PITCH: return dr_hz_v(d->f0);
+    case D_END: return dr_hz_v(d->f1);
+    case D_SWEEP: return isqrt_i(((int)d->pitch_ms - 1) * 80);
+    case D_DECAY: return isqrt_i(((int)d->amp_ms - 10) * 8);
+    case D_NOISE: return d->noise >> 1;
+    case D_DRIVE: return d->drive >> 1;
+    case D_TUNE: return foundry_tune[dr_lane];
+    default: return foundry_level[dr_lane];
+    }
+}
+
+static void dr_set(int k, int v)
+{
+    drum_def_t *d = dr_def();
+    v = clampi(v, 0, dr_hi(k));
+    if (v == dr_get(k)) return;
+    switch (k) {
+    case D_KIT: app_set_kit(dr_lane, (uint8_t)v); return;
+    case D_TUNE: foundry_tune[dr_lane] = (uint8_t)v; SH->proj.drum_tune[dr_lane] = (uint8_t)v; return;
+    case D_LEVEL: foundry_level[dr_lane] = (uint8_t)v; SH->proj.drum_level[dr_lane] = (uint8_t)v; return;
+    case D_MODEL: d->type = (uint8_t)v; break;
+    case D_PITCH: d->f0 = hz_tab[v]; break;
+    case D_END: d->f1 = hz_tab[v]; break;
+    case D_SWEEP: d->pitch_ms = (uint16_t)(1 + v * v / 80); break;
+    case D_DECAY: d->amp_ms = (uint16_t)(10 + v * v / 8); foundry_set_len(d); break;
+    case D_NOISE: d->noise = (uint8_t)(v * 2); break;
+    default: d->drive = (uint8_t)(v * 2); break;
+    }
+    dr_pending = 1;                                    /* re-synthesise */
+}
+
+static void dr_value(int k, char *o)
+{
+    const drum_def_t *d = dr_def();
+    switch (k) {
+    case D_KIT: strcpy(o, foundry_kit_names[dr_lane][dr_kit()]); break;
+    case D_MODEL: strcpy(o, foundry_model_names[d->type % DT_COUNT]); break;
+    case D_PITCH: sprintf(o, "%d HZ", d->f0); break;
+    case D_END: sprintf(o, "%d HZ", d->f1); break;
+    case D_SWEEP: sprintf(o, "%d MS", d->pitch_ms); break;
+    case D_DECAY: sprintf(o, "%d MS", d->amp_ms); break;
+    case D_TUNE: sprintf(o, "%+d", (int)foundry_tune[dr_lane] - 8); break;
+    default: sprintf(o, "%d", dr_get(k)); break;
+    }
+    { char *p = o; while (*p) { if (*p == ' ' && p[1] == 0) *p = 0; p++; } }
+}
+
+static void dr_knob(int k)
+{
+    int x = DR_X0 + (k % 5) * DR_W, y = DR_KY + (k / 5) * DR_KH, cx = x + DR_W / 2 - 2, sel = dr_area == 1 && k == dr_cur;
+    int used = (dr_uses[dr_def()->type % DT_COUNT] >> k) & 1;
+    char val[16];
+    gfx_rect(fb_bot, x, y, DR_W - 3, DR_KH - 3, COL_BG);
+    gfx_rrect(fb_bot, x, y, DR_W - 3, DR_KH - 3, sel ? COL_SURF : COL_BG);
+    draw_knob(cx, y + 12, 10, dr_get(k), 0, dr_hi(k), sel);
+    if (!used) {                                       /* this model ignores it */
+        int i, j;
+        for (j = y; j < y + DR_KH - 3; j++)
+            for (i = x; i < x + DR_W - 3; i++) fb_bot[j * 256 + i] = gfx_mix(fb_bot[j * 256 + i], COL_BG, 170);
+    }
+    dr_value(k, val);
+    gfx_text_c(fb_bot, cx, y + 25, F_SMALL, !used ? COL_TEXT3 : sel ? COL_ACCENT : COL_TEXT2, dk_names[k]);
+    gfx_text_c(fb_bot, cx, y + 32, F_SMALL, used ? COL_TEXT : COL_TEXT3, val);
+}
+
+static void dr_wave(void)
+{
+    uint32_t len, x;
+    const int16_t *s = foundry_sample(dr_lane, dr_kit(), &len);
+    char b[16];
+    gfx_rect(fb_bot, 6, DR_WY, 244, DR_WH, COL_BG);
+    gfx_rrect(fb_bot, 6, DR_WY, 244, DR_WH, COL_SURF);
+    if (!s || !len) return;
+    for (x = 0; x < 236; x++) {                        /* peak envelope, mirrored */
+        uint32_t a = x * len / 236, e = (x + 1) * len / 236, i;
+        int pk = 0, h;
+        for (i = a; i < e; i++) { int v = s[i] < 0 ? -s[i] : s[i]; if (v > pk) pk = v; }
+        h = (pk * (DR_WH / 2 - 3)) >> 15;
+        gfx_vline(fb_bot, 10 + (int)x, DR_WY + DR_WH / 2 - h, 2 * h + 1, COL_NOTE);
+    }
+    sprintf(b, "%lu MS", (unsigned long)(len * 1000u / FS_HZ));
+    gfx_text_r(fb_bot, 246, DR_WY + 3, F_SMALL, COL_TEXT2, b);
+}
+
+static void dr_head(void)
+{
+    int i;
+    for (i = 0; i < 4; i++)
+        button(DR_X0 + i * DR_W, TOP_Y, DR_W - 4, 18, dr_lane_names[i], i == dr_lane,
+               dr_area == 0 && dr_cur == i, COL_ACCENT);
+    button(DR_X0 + 4 * DR_W, TOP_Y, DR_W - 4, 18, "RESET", dr_flash != 0, dr_area == 0 && dr_cur == 4, COL_ACCENT);
+}
+
+static void dr_build_now(void)
+{
+    foundry_rebuild(dr_lane, dr_kit());
+    dr_pending = 0;
+    dr_last_build = frame;
+}
+
+static void dr_draw_static(void)
+{
+    if (!hz_tab[0]) dr_tables();
+    memset(dr_sig, 0xFF, sizeof dr_sig);
+    dr_head_sig = dr_wave_sig = 0xFFFFFFFF;
+    gfx_text_c(fb_bot, 128, 178, F_SMALL, COL_TEXT3, "TAP A LANE TO HEAR IT   TAP PANEL AGAIN FOR SYNTH");
+}
+
+static void dr_frame(void)
+{
+    int k;
+    uint32_t hs = dr_lane | (dr_area << 3) | (dr_cur << 4) | ((dr_flash != 0) << 8);
+    if (dr_pending && (!dr_drag || frame - dr_last_build >= 10)) {
+        dr_build_now();
+        if (!dr_drag) app_audition(dr_lane, dr_kit());
+    }
+    if (dr_flash) dr_flash--;
+    if (hs != dr_head_sig) { dr_head(); dr_head_sig = hs; }
+    for (k = 0; k < D_COUNT; k++) {
+        uint32_t sig = (uint32_t)dr_get(k) | ((uint32_t)(dr_area == 1 && k == dr_cur) << 16) |
+                       ((uint32_t)dr_def()->type << 20) | ((uint32_t)dr_lane << 26) | ((uint32_t)dr_kit() << 29);
+        if (sig != dr_sig[k]) { dr_knob(k); dr_sig[k] = sig; }
+    }
+    {
+        uint32_t ws = (uint32_t)dr_last_build * 7u + dr_lane * 3u + dr_kit() * 5u;
+        if (ws != dr_wave_sig) { dr_wave(); dr_wave_sig = ws; }
+    }
+}
+
+static void dr_lane_tap(int i)
+{
+    if (i < 4) { dr_lane = (uint8_t)i; app_audition(dr_lane, dr_kit()); }
+    else {                                              /* RESET this slot to ETCH's preset */
+        foundry_defs[dr_lane][dr_kit()] = foundry_presets[dr_lane][dr_kit()];
+        dr_flash = 8;
+        dr_build_now();
+        app_audition(dr_lane, dr_kit());
+    }
+}
+
+static void dr_touch(int phase)
+{
+    static int saved;
+    static drum_def_t saved_def;
+    static uint8_t saved_tune, saved_level;
+    if (phase == 0) {
+        dr_drag = 0;
+        if (t_y < DR_KY - 4) { dr_area = 0; dr_cur = (uint8_t)clampi((t_x - DR_X0) / DR_W, 0, 4); dr_lane_tap(dr_cur); return; }
+        if (t_y >= DR_KY + 2 * DR_KH) { if (t_y >= DR_WY && t_y < DR_WY + DR_WH) app_audition(dr_lane, dr_kit()); return; }
+        dr_area = 1;
+        dr_cur = (uint8_t)(clampi((t_y - DR_KY) / DR_KH, 0, 1) * 5 + clampi((t_x - DR_X0) / DR_W, 0, 4));
+        dr_start = saved = dr_get(dr_cur);
+        saved_def = *dr_def();
+        saved_tune = foundry_tune[dr_lane];
+        saved_level = foundry_level[dr_lane];
+        dr_drag = 1;
+    } else if (phase == 1 && dr_drag) {
+        int dy = t_sy - t_y;
+        dr_set(dr_cur, dr_start + (dr_is_enum(dr_cur) ? dy / 14 : dr_cur >= D_TUNE ? dy / 6 : dy / 2));
+    } else if (phase == 2 && dr_drag) {
+        if (t_temp) {                                              /* L: temporary, exact */
+            if (dr_cur == D_KIT) dr_set(D_KIT, saved);
+            else {
+                *dr_def() = saved_def;
+                foundry_tune[dr_lane] = saved_tune; SH->proj.drum_tune[dr_lane] = saved_tune;
+                foundry_level[dr_lane] = saved_level; SH->proj.drum_level[dr_lane] = saved_level;
+                dr_pending = 1;
+            }
+        }
+        else if (!t_moved && dr_is_enum(dr_cur)) {                 /* tap steps a choice */
+            int v = dr_get(dr_cur) + 1;
+            dr_set(dr_cur, v > dr_hi(dr_cur) ? 0 : v);
+        }
+        dr_drag = 0;
+        if (!dr_pending) app_audition(dr_lane, dr_kit());
+    }
+}
+
+static void dr_keys(uint32_t down, uint32_t held, uint32_t rep)
+{
+    if (held & KEY_A) {
+        if (dr_area == 0) { if (down & KEY_A) dr_lane_tap(dr_cur); return; }
+        {
+            int d = 0, k = dr_cur, big = dr_is_enum(k) || k >= D_TUNE ? 1 : 8;
+            if (rep & KEY_RIGHT) d = 1;
+            if (rep & KEY_LEFT) d = -1;
+            if (rep & KEY_UP) d = big;
+            if (rep & KEY_DOWN) d = -big;
+            if (d) dr_set(k, dr_get(k) + d);
+            if (down & KEY_A) app_audition(dr_lane, dr_kit());
+        }
+        return;
+    }
+    if (dr_area == 0) {
+        if ((rep & KEY_LEFT) && dr_cur > 0) dr_cur--;
+        if ((rep & KEY_RIGHT) && dr_cur < 4) dr_cur++;
+        if (rep & KEY_DOWN) dr_area = 1;
+    } else {
+        if ((rep & KEY_LEFT) && dr_cur % 5) dr_cur--;
+        if ((rep & KEY_RIGHT) && dr_cur % 5 < 4) dr_cur++;
+        if (rep & KEY_UP) { if (dr_cur >= 5) dr_cur -= 5; else dr_area = 0; }
+        if ((rep & KEY_DOWN) && dr_cur < 5) dr_cur += 5;
+    }
 }
 
 /* ================================= GEN ==================================== */
@@ -1257,7 +1519,7 @@ static void enter_tab(void)
     switch (tab) {
     case TAB_LIVE: live_draw_static(); break;
     case TAB_XY: xy_draw_static(); break;
-    case TAB_PANEL: panel_draw_static(); break;
+    case TAB_PANEL: if (pn_page) dr_draw_static(); else panel_draw_static(); break;
     case TAB_KEYS: kb_sig = 0xFFFFFFFF; break;
     case TAB_SONG: sg_sig = 0xFFFFFFFF; fl_sig = 0xFFFFFFFF; fl_valid = 0; fl_about = 0; break;
     default: gen_sig = 0xFFFFFFFF; break;
@@ -1269,7 +1531,7 @@ static void tab_touch(int phase)
     switch (tab) {
     case TAB_LIVE: live_touch(phase); break;
     case TAB_XY: xy_touch(phase); break;
-    case TAB_PANEL: panel_touch(phase); break;
+    case TAB_PANEL: if (pn_page) dr_touch(phase); else panel_touch(phase); break;
     case TAB_KEYS: kb_touch(phase); break;
     case TAB_SONG: if (sg_page) fl_touch(phase); else sg_touch(phase); break;
     default: gen_touch(phase); break;
@@ -1289,14 +1551,20 @@ void ui_frame(uint32_t down, uint32_t held)
 
     /* ---- global buttons ---------------------------------------------- */
     if (held & KEY_SELECT) {
-        if (down & KEY_LEFT) {
+        if (down & KEY_LEFT) {                        /* pages count as stops */
             if (tab == TAB_SONG && sg_page) sg_page = 0;
-            else { tab = (uint8_t)((tab + TAB_COUNT - 1) % TAB_COUNT); if (tab == TAB_SONG) sg_page = 1; }
+            else if (tab == TAB_PANEL && pn_page) pn_page = 0;
+            else {
+                tab = (uint8_t)((tab + TAB_COUNT - 1) % TAB_COUNT);
+                if (tab == TAB_SONG) sg_page = 1;
+                if (tab == TAB_PANEL) pn_page = 1;
+            }
             need_full = 1;
         }
         if (down & KEY_RIGHT) {
             if (tab == TAB_SONG && !sg_page) sg_page = 1;
-            else { tab = (uint8_t)((tab + 1) % TAB_COUNT); sg_page = 0; }
+            else if (tab == TAB_PANEL && !pn_page) pn_page = 1;
+            else { tab = (uint8_t)((tab + 1) % TAB_COUNT); sg_page = 0; pn_page = 0; }
             need_full = 1;
         }
         if (down & KEY_A) app_evolve();
@@ -1305,7 +1573,7 @@ void ui_frame(uint32_t down, uint32_t held)
         switch (tab) {
         case TAB_LIVE: live_keys(down, held, rep); break;
         case TAB_XY: xy_keys(down, held, rep); break;
-        case TAB_PANEL: panel_keys(down, held, rep); break;
+        case TAB_PANEL: if (pn_page) dr_keys(down, held, rep); else panel_keys(down, held, rep); break;
         case TAB_KEYS: kb_keys(down, held, rep); break;
         case TAB_SONG: if (sg_page) fl_keys(down, held, rep); else sg_keys(down, held, rep); break;
         default: gen_keys(down, held, rep); break;
@@ -1326,8 +1594,9 @@ void ui_frame(uint32_t down, uint32_t held)
             t_on_tabs = t_y < 22;
             if (t_on_tabs) {
                 uint8_t nt = (uint8_t)clampi((t_x - TAB_X0) / TAB_W, 0, TAB_COUNT - 1);
-                if (nt != tab) { tab = nt; sg_page = 0; need_full = 1; }
+                if (nt != tab) { tab = nt; sg_page = 0; pn_page = 0; need_full = 1; }
                 else if (nt == TAB_SONG) { sg_page ^= 1; need_full = 1; }
+                else if (nt == TAB_PANEL) { pn_page ^= 1; need_full = 1; }
             } else tab_touch(0);
         } else if (!t_on_tabs) {
             if (t_x - t_sx > 2 || t_sx - t_x > 2 || t_y - t_sy > 2 || t_sy - t_y > 2) t_moved = 1;
@@ -1342,7 +1611,7 @@ void ui_frame(uint32_t down, uint32_t held)
     switch (tab) {
     case TAB_LIVE: live_frame(); break;
     case TAB_XY: xy_frame(); break;
-    case TAB_PANEL: panel_frame(); break;
+    case TAB_PANEL: if (pn_page) dr_frame(); else panel_frame(); break;
     case TAB_KEYS: kb_frame(); break;
     case TAB_SONG: if (sg_page) fl_frame(); else sg_frame(); break;
     default: gen_frame(); break;

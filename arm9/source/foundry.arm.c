@@ -22,6 +22,9 @@
 #include <string.h>
 #include "audio.h"
 #include "dsp_tables.h"
+#ifdef __NDS__
+#include <nds.h>
+#endif
 
 int8_t evo_tune_ofs[DS_LANES];
 uint8_t foundry_tune[DS_LANES]  = { 8, 8, 8, 8, 8, 8 };
@@ -37,20 +40,12 @@ const char * const foundry_kit_names[DS_LANES][KITS_PER_LANE] = {
     { "BURST", "BURST", "BURST", "BURST" },
 };
 
-/* ---- sound definitions ----------------------------------------------------- */
-enum { DT_KICK, DT_SNARE, DT_CLAP, DT_RIM, DT_HAT, DT_METALHAT, DT_BLIP, DT_RING, DT_CRUSH };
+/* ---- sound definitions: the presets, and the editable copy ------------------ */
+const char * const foundry_model_names[DT_COUNT] = {
+    "KICK", "SNARE", "CLAP", "RIM", "HAT", "METAL", "BLIP", "RING", "CRUSH"
+};
 
-typedef struct {
-    uint8_t  type;
-    uint16_t f0, f1;      /* Hz: start / end (tones), or high-pass corner (noise) */
-    uint16_t pitch_ms;    /* pitch envelope time constant                         */
-    uint16_t amp_ms;      /* amplitude decay to e^-6                              */
-    uint8_t  noise;       /* 0..255 noise mix / click amount                      */
-    uint8_t  drive;       /* 0..255                                               */
-    uint16_t len_ms;
-} drum_def_t;
-
-static const drum_def_t defs[DS_LANES][KITS_PER_LANE] = {
+const drum_def_t foundry_presets[DS_LANES][KITS_PER_LANE] = {
     {   /* KICK */
         { DT_KICK, 150, 44, 28, 520, 0, 40, 520 },      /* DEEP  */
         { DT_KICK, 230, 52, 12, 300, 60, 150, 320 },    /* PUNCH */
@@ -89,6 +84,8 @@ static const drum_def_t defs[DS_LANES][KITS_PER_LANE] = {
     },
 };
 
+drum_def_t foundry_defs[DS_LANES][KITS_PER_LANE];
+static dvoice_t dv[DS_LANES] AUDIO_BSS;
 static int16_t *smp[DS_LANES][KITS_PER_LANE];
 static uint32_t smp_len[DS_LANES][KITS_PER_LANE];
 
@@ -257,31 +254,66 @@ static void render(int16_t *out, uint32_t n, const drum_def_t *d, uint32_t decay
     }
 }
 
+/* Re-render one sound from foundry_defs and swap it in.  The new sample is
+ * rendered first; the swap happens with interrupts off, and any voice still
+ * playing the old buffer is silenced before that buffer is freed, so an edit
+ * can never leave the audio interrupt reading freed memory. */
+void foundry_rebuild(uint32_t l, uint32_t k)
+{
+    drum_def_t *d = &foundry_defs[l][k];
+    int32_t dd = (int32_t)foundry_decay[l] - 8;
+    uint32_t scale = (uint32_t)(256 + dd * 40), n, v;
+    int16_t *nb, *old;
+    if (l >= DS_LANES || k >= KITS_PER_LANE) return;
+    if (l >= 4) k = 0;                                 /* the new lanes have one sound */
+    if (d->type >= DT_COUNT) d->type = DT_KICK;
+    n = ((uint32_t)d->len_ms * scale >> 8) * (FS_HZ / 1000u);
+    if (n < 256) n = 256;
+    if (n > FS_HZ * 2u) n = FS_HZ * 2u;
+    nb = (int16_t *)malloc(n * sizeof(int16_t));
+    if (!nb) return;
+    render(nb, n, d, scale);
+    old = smp[l][k];
+    {
+#ifdef __NDS__
+        int ime = enterCriticalSection();
+#endif
+        uint32_t kk;
+        for (kk = 0; kk < KITS_PER_LANE; kk++)
+            if (kk == k || (l >= 4)) { smp[l][kk] = nb; smp_len[l][kk] = n; }
+        for (v = 0; v < DS_LANES; v++)
+            if (dv[v].active && dv[v].smp == old) dv[v].active = 0;
+#ifdef __NDS__
+        leaveCriticalSection(ime);
+#endif
+    }
+    if (old) free(old);
+}
+
+/* derived length: the decay to e^-6 plus a short tail */
+void foundry_set_len(drum_def_t *d)
+{
+    uint32_t ms = (uint32_t)d->amp_ms + d->amp_ms / 8u + 20u;
+    d->len_ms = (uint16_t)(ms > 2000u ? 2000u : ms);
+}
+
 void foundry_build(void)
 {
     uint32_t l, k;
-    for (l = 0; l < DS_LANES; l++) {
-        uint32_t scale = 256;                      /* DECAY 8 = as designed */
-        int32_t dd = (int32_t)foundry_decay[l] - 8;
-        scale = (uint32_t)(256 + dd * 40);
-        for (k = 0; k < KITS_PER_LANE; k++) {
-            const drum_def_t *d = &defs[l][k];
-            uint32_t n = ((uint32_t)d->len_ms * scale >> 8) * (FS_HZ / 1000u);
-            if (k > 0 && l >= 4) {                 /* the new lanes have one sound */
-                smp[l][k] = smp[l][0];
-                smp_len[l][k] = smp_len[l][0];
-                continue;
-            }
-            if (smp[l][k]) free(smp[l][k]);
-            smp[l][k] = (int16_t *)malloc(n * sizeof(int16_t));
-            smp_len[l][k] = smp[l][k] ? n : 0;
-            if (smp[l][k]) render(smp[l][k], n, d, scale);
-        }
-    }
+    static uint8_t init;
+    if (!init) { memcpy(foundry_defs, foundry_presets, sizeof foundry_defs); init = 1; }
+    for (l = 0; l < DS_LANES; l++)
+        for (k = 0; k < (l >= 4 ? 1u : KITS_PER_LANE); k++) foundry_rebuild(l, k);
+}
+
+const int16_t *foundry_sample(uint32_t l, uint32_t k, uint32_t *len)
+{
+    if (l >= DS_LANES || k >= KITS_PER_LANE) { *len = 0; return 0; }
+    *len = smp_len[l][k];
+    return smp[l][k];
 }
 
 /* ---- playback (audio interrupt) --------------------------------------------- */
-static dvoice_t dv[DS_LANES] AUDIO_BSS;
 /* pan (Q15 left, right): kick and snare centre, hats and new lanes spread */
 static const int16_t pan_l[DS_LANES] = { 23170, 23170, 17000, 28000, 30000, 15000 };
 static const int16_t pan_r[DS_LANES] = { 23170, 23170, 28000, 17000, 15000, 30000 };
