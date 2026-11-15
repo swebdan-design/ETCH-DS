@@ -160,7 +160,7 @@ static void draw_stats(void)
     uint8_t bars = bars_to_evolution(SH), play = SH->playing;
     uint32_t sig = (uint32_t)pr->gen.mode | ((uint32_t)SH->cur << 2) | ((uint32_t)pr->pat[SH->cur].gen << 8) |
                    ((uint32_t)bars << 16) | ((uint32_t)play << 20) | ((uint32_t)pr->synth.bpm << 21) |
-                   ((uint32_t)(SH->fill != 0) << 29) | (play ? 0 : ((frames >> 5) & 1) << 30);
+                   ((uint32_t)(SH->fill != 0) << 29) | (play ? 0 : ((frames >> 5) & 1) << 30) | ((uint32_t)(SH->fill_hold != 0) << 31);
     char b[12];
     if (sig == stat_sig) return;
     stat_sig = sig;
@@ -171,7 +171,12 @@ static void draw_stats(void)
     }
     stat(0, "MODE", corr_mode_names[pr->gen.mode % EVO_COUNT], COL_TEXT);
     sprintf(b, "%02d", SH->cur);
-    stat(1, SH->fill ? "PATTERN  FILL" : "PATTERN", b, SH->fill ? COL_ACCENT : COL_TEXT);
+    stat(1, "PATTERN", b, COL_TEXT);
+    if (SH->fill) {                                    /* inverted tag inside the block */
+        int x = 6 + 49 + 22;
+        gfx_rrect(fb_top, x, STAT_Y + 10, 21, 8, COL_ACCENT);
+        gfx_text_c(fb_top, x + 11, STAT_Y + 11, F_SMALL, COL_BG, SH->fill_hold ? "HOLD" : "FILL");
+    }
     sprintf(b, "%03d", pr->pat[SH->cur].gen);
     stat(2, "GENERATION", b, COL_TEXT);
     if (bars) sprintf(b, "%d BAR%s", bars, bars == 1 ? "" : "S");
