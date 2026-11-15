@@ -91,16 +91,22 @@ Formats: oscillator phase is 32 bits per cycle; ACID's signal is Q14 and the lad
 
 ## 5. The GUI
 
-Each screen has two layers. A 16-bit bitmap (BG3) holds the art and graphics, and a text console (BG0) holds the labels. The labels use ETCH DS's own squared 5×7 font with a stamped shadow (`tools/gen_font.py`). Static art is painted once per screen or tab and kept in RAM: brushed-steel plates, bevels, rivets, hazard bands, rust, recessed displays. Dynamic parts redraw only when what they show changes, restoring their patch of plate first. That covers pattern columns, LEDs, the scope, knobs, faders and 7-segment readouts.
+Each screen is a single 16-bit bitmap. All text is drawn into it with two proportional pixel fonts (`tools/gen_fonts.py`): 3×5 small caps for captions and a rounded 5×7 for values. There is no 8×8 character grid, so every label sits exactly where the layout puts it. The design system is in `gfx.h`:
+
+* **Surfaces.** Flat dark surfaces, 1 px borders, 2 px rounded corners.
+* **Spacing.** A 6 px outer margin and 4 px gaps.
+* **Colour.** Small grey captions over white values. One accent (orange) marks what is active, and green marks what CORROSION has just changed.
+
+Every hit test uses the same layout constants as the drawing code. Elements redraw only when what they show changes; with flat surfaces, a redraw is just "fill, then draw".
 
 Files:
 
-* `gfx.c`: primitives and industrial surfaces
+* `gfx.c`: primitives and text
 * `scr_top.c`: the top screen
 * `ui.c`: the tabs and the input grammar
 * `edit.c`: the editing actions
 
-The GUI runs in the main loop. It cannot delay audio, and a 2-minute melonDS run with all tabs in use had 0 dropouts.
+The GUI runs in the main loop and cannot delay audio. A melonDS run with all tabs in use had 0 dropouts.
 
 ## 5b. Saves (`storage.c`)
 

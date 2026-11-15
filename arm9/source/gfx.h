@@ -1,7 +1,12 @@
 /*
  * ETCH DS -- by Synth Centric
- * Screen layers: on each screen a 16-bit bitmap (BG3) for graphics under a
- * libnds text console (BG0, 8x8 font, 32 x 24 cells) for labels.
+ * Drawing for the two screens.  Each screen is one 16-bit bitmap (BG3);
+ * all text is drawn into it with two proportional pixel fonts, so every
+ * label sits exactly where the layout puts it (no 8x8 character grid).
+ *
+ * Design system: flat dark surfaces, 1 px borders, 2 px rounded corners,
+ * 6 px outer margin, 4 px gaps.  Small grey captions over white values; one
+ * accent (orange) for what is active, green for what CORROSION just changed.
  */
 #ifndef ETCH_DS_GFX_H
 #define ETCH_DS_GFX_H
@@ -10,60 +15,50 @@
 
 #define C(r, g, b) ((uint16_t)(RGB15(r, g, b) | BIT(15)))
 
-/* the corroded palette */
-#define COL_BG      C(2, 2, 3)      /* near black steel   */
-#define COL_STEEL   C(9, 9, 10)     /* plate base         */
-#define COL_STEEL_D C(5, 5, 6)      /* darker plate       */
-#define COL_LCD     C(1, 1, 1)      /* display well       */
-#define COL_AMBER   C(31, 18, 3)    /* lit segment / LED  */
-#define COL_GHOST   C(5, 3, 1)      /* unlit segment      */
-#define COL_HAZARD  C(29, 21, 2)
-#define COL_PANEL   C(4, 4, 5)
-#define COL_CELL    C(6, 5, 5)
-#define COL_LINE    C(9, 7, 6)
-#define COL_DIM     C(12, 10, 9)
-#define COL_RUST    C(22, 8, 3)
-#define COL_HOT     C(31, 15, 4)    /* accent / active    */
-#define COL_SULFUR  C(30, 26, 8)    /* cursor             */
-#define COL_ACID    C(10, 30, 16)   /* evolved / playhead */
-#define COL_BONE    C(27, 26, 23)
-#define COL_PLAY    C(9, 9, 11)     /* playhead column    */
+#define COL_BG      C(2, 2, 3)      /* screen                  */
+#define COL_SURF    C(4, 4, 5)      /* panels                  */
+#define COL_SURF2   C(6, 6, 7)      /* controls, raised cells  */
+#define COL_SURF3   C(9, 9, 10)     /* hover / beat columns    */
+#define COL_BORDER  C(8, 8, 9)
+#define COL_TEXT    C(29, 29, 28)   /* values                  */
+#define COL_TEXT2   C(17, 17, 17)   /* captions                */
+#define COL_TEXT3   C(11, 11, 12)   /* disabled / hints        */
+#define COL_ACCENT  C(31, 14, 3)    /* orange                  */
+#define COL_ACC_DIM C(11, 5, 2)
+#define COL_ACC_LO  C(6, 3, 1)
+#define COL_HOT     C(31, 27, 20)   /* accented notes          */
+#define COL_EVOLVE  C(8, 28, 16)    /* CORROSION's changes     */
+#define COL_RED     C(29, 6, 4)
+#define COL_PLAY    C(8, 6, 5)      /* playhead column         */
 
-/* text colours (ConsoleColor slots, re-tinted in gfx_init) */
-enum { T_DIM = CONSOLE_GRAY, T_TEXT = CONSOLE_LIGHT_GRAY, T_BRIGHT = CONSOLE_WHITE,
-       T_RUST = CONSOLE_RED, T_HOT = CONSOLE_LIGHT_RED, T_SULFUR = CONSOLE_LIGHT_YELLOW,
-       T_ACID = CONSOLE_LIGHT_GREEN };
+enum { F_SMALL, F_MAIN };           /* 5 px caps, 7 px caps    */
 
 extern uint16_t *fb_top, *fb_bot;
-extern PrintConsole con_top, con_bot;
 
 void gfx_init(void);
 void gfx_clear(uint16_t *fb, uint16_t c);
 void gfx_rect(uint16_t *fb, int x, int y, int w, int h, uint16_t c);
 void gfx_frame(uint16_t *fb, int x, int y, int w, int h, uint16_t c);
+void gfx_rrect(uint16_t *fb, int x, int y, int w, int h, uint16_t c);    /* rounded */
+void gfx_rframe(uint16_t *fb, int x, int y, int w, int h, uint16_t c);
 void gfx_hline(uint16_t *fb, int x, int y, int w, uint16_t c);
 void gfx_vline(uint16_t *fb, int x, int y, int h, uint16_t c);
 void gfx_line(uint16_t *fb, int x0, int y0, int x1, int y1, uint16_t c);
 void gfx_disc(uint16_t *fb, int cx, int cy, int r, uint16_t c);
 void gfx_ring(uint16_t *fb, int cx, int cy, int r, uint16_t c);
+/* arc of radius r (and r-1 when thick), from angle a0 to a1 (1024 = turn,
+ * 0 = up, clockwise) */
+void gfx_arc(uint16_t *fb, int cx, int cy, int r, int a0, int a1, int thick, uint16_t c);
 uint16_t gfx_mix(uint16_t a, uint16_t b, int t);      /* t 0..256 */
-uint16_t gfx_shade(uint16_t c, int d);                /* +-d on every channel */
-
-/* industrial surfaces */
-void gfx_plate(uint16_t *fb, int x, int y, int w, int h, uint16_t base);  /* brushed steel */
-void gfx_bevel(uint16_t *fb, int x, int y, int w, int h, int raised);
-void gfx_well(uint16_t *fb, int x, int y, int w, int h, uint16_t fill);   /* inset */
-void gfx_button(uint16_t *fb, int x, int y, int w, int h, int pressed);   /* raised plate */
-void gfx_rivet(uint16_t *fb, int cx, int cy);
-void gfx_rivets(uint16_t *fb, int x, int y, int w, int h);                /* four corners */
-void gfx_hazard(uint16_t *fb, int x, int y, int w, int h);
-void gfx_rust(uint16_t *fb, int cx, int cy, int r, uint32_t seed);
 void gfx_led(uint16_t *fb, int cx, int cy, int on, uint16_t col);
-/* 7-segment character (0-9, A-F, '-', ' ') of height 2*s+3, width s+4 */
+/* thin 7-segment character: height 2*s+3, width s+4 */
 void gfx_seg7(uint16_t *fb, int x, int y, char ch, int s, uint16_t on, uint16_t ghost);
-int  gfx_seg7_str(uint16_t *fb, int x, int y, const char *str, int s, uint16_t on, uint16_t ghost);
 
-/* text at a cell; pass NULL fmt with n>0 to blank n cells */
-void txt(PrintConsole *con, int row, int col, int color, const char *fmt, ...);
-void txt_clear(PrintConsole *con, int row, int col, int n);
+/* text: returns the x after the last glyph */
+int  gfx_text_w(int font, const char *s);
+int  gfx_text(uint16_t *fb, int x, int y, int font, uint16_t c, const char *s);
+void gfx_text_c(uint16_t *fb, int cx, int y, int font, uint16_t c, const char *s);   /* centred */
+void gfx_text_r(uint16_t *fb, int rx, int y, int font, uint16_t c, const char *s);   /* right   */
+int  gfx_textf(uint16_t *fb, int x, int y, int font, uint16_t c, const char *fmt, ...);
+#define FONT_H(f) ((f) == F_SMALL ? 5 : 7)
 #endif
