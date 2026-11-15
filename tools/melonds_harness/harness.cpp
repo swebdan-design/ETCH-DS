@@ -2,6 +2,10 @@
  * ETCH DS -- by Synth Centric
  * Headless melonDS test harness (links melonDS's core library).
  *
+ * Licence: because it links melonDS (GPL-3.0), this test tool is
+ * GPL-3.0-or-later.  It is a development tool only: nothing from melonDS
+ * is part of the ETCH DS ROM.
+ *
  *   harness ROM FRAMES OUT_PREFIX [script] [symbols]
  *
  * Runs the ROM for FRAMES frames (59.83 Hz) with melonDS's interpreter (no

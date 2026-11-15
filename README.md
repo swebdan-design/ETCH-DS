@@ -134,4 +134,4 @@ docs/          architecture, milestone report, ideas
 
 ## Credits
 
-**ETCH DS — by Synth Centric.** Synth Centric is Dan Schwebel. CORROSION and ETCH's oscillator recipes come from ETCH (MIT; see `corrosion/LICENSE.ETCH`); the swing-change fix and the edit epoch come from ETCH II. Built with BlocksDS; tested with melonDS.
+**ETCH DS — by Synth Centric.** Synth Centric is Dan Schwebel. CORROSION and ETCH's oscillator recipes come from ETCH (MIT; see `corrosion/LICENSE.ETCH`); the swing-change fix and the edit epoch come from ETCH II. Built with BlocksDS; tested with melonDS. Licences and trademarks: see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). TB-303 is a trademark of Roland Corporation; ETCH DS is not affiliated with Roland or Nintendo.

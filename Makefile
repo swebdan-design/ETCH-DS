@@ -22,7 +22,7 @@ NAME		:= etch_ds
 GAME_TITLE	:= ETCH DS
 GAME_SUBTITLE	:= It squelches (milestone 1)
 GAME_AUTHOR	:= Synth Centric
-GAME_ICON	:= $(BLOCKSDS)/sys/icon.gif
+GAME_ICON	:= assets/icon.bmp
 
 MAKE		:= make
 RM		:= rm -rf

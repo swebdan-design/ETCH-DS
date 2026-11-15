@@ -500,7 +500,7 @@ static void knob_value(int k, char *o)
     switch (k) {
     case K_WAVE: strcpy(o, waves[v & 3]); break;
     case K_DRIVE: strcpy(o, drives[v & 3]); break;
-    case K_FILT: strcpy(o, v ? "KEY" : "303"); break;
+    case K_FILT: strcpy(o, v ? "KEY" : "FIXED"); break;
     case K_TEST: strcpy(o, v ? "ON" : "OFF"); break;
     default: sprintf(o, "%d", v); break;
     }
@@ -1343,7 +1343,7 @@ static uint32_t fl_sig = 0xFFFFFFFF;
 static const char * const about_title[N_ABOUT] = { "ETCH DS", "GENERATIVE MUSIC", "SYNTH CENTRIC", "CREDITS" };
 static const char * const about_text[N_ABOUT] = {
     "A generative acid machine for the Nintendo DS, by Synth Centric. Version " ETCH_DS_VERSION ".\n"
-    "The sequel to ETCH for the Game Boy. The same composer, CORROSION, now plays a real-time 303 voice, "
+    "The sequel to ETCH for the Game Boy. The same composer, CORROSION, now plays a real-time acid bass voice, "
     "six drum lanes and an effects chain, with the touch screen for performing.",
     "Generative music is made by a system of rules and chance instead of being fixed note by note.\n"
     "CORROSION composes a bass line and drums from a seed. In DRIFT or CORRODE it keeps rewriting them, "
