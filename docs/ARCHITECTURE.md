@@ -95,7 +95,7 @@ Each screen is a single 16-bit bitmap. All text is drawn into it with two propor
 
 * **Surfaces.** Flat dark surfaces, 1 px borders, 2 px rounded corners.
 * **Spacing.** A 6 px outer margin and 4 px gaps.
-* **Colour.** Grayscale throughout: hierarchy comes from brightness alone. Small grey captions sit over white values. White marks what is active, and lit buttons invert to black on white. Accented notes and the kick are white, other hits grey, and steps CORROSION has just changed glow with a fading light wash.
+* **Colour.** Black on white, minimal: hierarchy comes from weight alone, and boxes are kept to a minimum (readouts sit on the page, separated by hairlines). Grey captions sit over black values. Black marks what is active, and lit buttons invert to white on black. Accented notes and the kick are black, other hits dark grey, and steps CORROSION has just changed are washed in grey, fading.
 
 Every hit test uses the same layout constants as the drawing code. Elements redraw only when what they show changes; with flat surfaces, a redraw is just "fill, then draw".
 

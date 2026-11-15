@@ -149,7 +149,7 @@ static void draw_header(void)
 static void stat(int i, const char *cap, const char *val, uint16_t vc)
 {
     int x = 6 + i * 49;
-    gfx_rrect(fb_top, x, STAT_Y, 46, 20, COL_SURF);
+    if (i) gfx_vline(fb_top, x - 2, STAT_Y + 2, 16, COL_SURF2);
     gfx_text(fb_top, x + 5, STAT_Y + 3, F_SMALL, COL_TEXT2, cap);
     gfx_text(fb_top, x + 5, STAT_Y + 10, F_MAIN, vc, val);
 }
@@ -166,7 +166,6 @@ static void draw_stats(void)
     stat_sig = sig;
     gfx_rect(fb_top, 0, STAT_Y, 256, 20, COL_BG);
     if (!play) {
-        gfx_rrect(fb_top, 6, STAT_Y, 244, 20, COL_SURF);
         gfx_text_c(fb_top, 128, STAT_Y + 7, F_MAIN, (frames >> 5) & 1 ? COL_TEXT : COL_TEXT3, "PRESS START");
         return;
     }
@@ -196,8 +195,8 @@ static void draw_scope(void)
         a = prev < y ? prev : y;
         b = prev < y ? y : prev;
         for (; a <= b; a++) {
-            sbuf[a * 244 + x] = C(24, 24, 24);
-            sbuf[(a + 1) * 244 + x] = gfx_mix(sbuf[(a + 1) * 244 + x], C(24, 24, 24), 60);
+            sbuf[a * 244 + x] = COL_TEXT;
+            sbuf[(a + 1) * 244 + x] = gfx_mix(sbuf[(a + 1) * 244 + x], COL_TEXT, 50);
         }
         prev = y;
     }

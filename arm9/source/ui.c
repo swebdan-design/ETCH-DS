@@ -52,7 +52,7 @@ static void button(int x, int y, int w, int h, const char *label, int lit, int s
 static void stat_block(int x, int y, int w, const char *cap, const char *val, uint16_t vc)
 {
     gfx_rect(fb_bot, x, y, w, 20, COL_BG);
-    gfx_rrect(fb_bot, x, y, w, 20, COL_SURF);
+    if (x > 6) gfx_vline(fb_bot, x - 2, y + 2, 16, COL_SURF2);
     gfx_text(fb_bot, x + 5, y + 3, F_SMALL, COL_TEXT2, cap);
     gfx_text(fb_bot, x + 5, y + 10, F_MAIN, vc, val);
 }
