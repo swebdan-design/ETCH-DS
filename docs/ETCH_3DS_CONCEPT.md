@@ -129,7 +129,7 @@ Everything works from a **retro buffer**: the last bar of the mix (and of the dr
 
 **Record it.** Punches can be recorded into a **PUNCH lane** per pattern (16 steps, one effect per step), so a stutter or a filter rise becomes part of the song. Under DRIFT and CORRODE the lane is left alone unless you allow it, in which case CORROSION's evolution can sprinkle punches in (a new, bounded "performer" layer).
 
-**On an Old 3DS** (no C-stick): hold ZL… which it also lacks. So instead, hold **Y** and the Circle Pad switches from the PUNCH pad to BEAT REPEAT, with the same four directions. The Circle Pad Pro accessory adds a second stick.
+**On an Old 3DS** (no C-stick, no ZL/ZR): hold **Y** and the Circle Pad switches from the PUNCH pad to BEAT REPEAT, with the same four directions. To latch, press R as you let go. The Circle Pad Pro accessory adds a second stick.
 
 **Back to ETCH DS.** The DS has the CPU and memory for a reduced PUNCH: a one-bar buffer of about 260 KB, out of the 4 MB of which ETCH DS uses about 0.6 MB. Hold **Y + D-pad** for the four beat repeats, and **X + D-pad** for filter low/high, echo throw and crush. That makes a good first test of the idea before the 3DS exists.
 
