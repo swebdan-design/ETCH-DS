@@ -66,4 +66,8 @@ void gfx_text_c(uint16_t *fb, int cx, int y, int font, uint16_t c, const char *s
 void gfx_text_r(uint16_t *fb, int rx, int y, int font, uint16_t c, const char *s);   /* right   */
 int  gfx_textf(uint16_t *fb, int x, int y, int font, uint16_t c, const char *fmt, ...);
 #define FONT_H(f) ((f) == F_SMALL ? 5 : 7)
+/* text scaled by an integer factor (wordmarks) */
+int  gfx_text_scaled(uint16_t *fb, int x, int y, int font, int scale, uint16_t c, const char *s);
+/* word-wrapped paragraph in a column of width w; returns the y after it */
+int  gfx_wrap(uint16_t *fb, int x, int y, int w, int font, int line_h, uint16_t c, const char *s);
 #endif

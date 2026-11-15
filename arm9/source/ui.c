@@ -1038,6 +1038,44 @@ static uint8_t fl_msg_t;
 static uint16_t fl_msg_col;
 static uint32_t fl_sig = 0xFFFFFFFF;
 
+
+/* ---- ABOUT (from FILE), as on ETCH and ETCH II ------------------------------ */
+#define N_ABOUT 4
+static const char * const about_title[N_ABOUT] = { "ETCH DS", "GENERATIVE MUSIC", "SYNTH CENTRIC", "CREDITS" };
+static const char * const about_text[N_ABOUT] = {
+    "A generative acid machine for the Nintendo DS, by Synth Centric. Version " ETCH_DS_VERSION ".\n"
+    "The sequel to ETCH for the Game Boy. The same composer, CORROSION, now plays a real-time 303 voice, "
+    "six drum lanes and an effects chain, with the touch screen for performing.",
+    "Generative music is made by a system of rules and chance instead of being fixed note by note.\n"
+    "CORROSION composes a bass line and drums from a seed. In DRIFT or CORRODE it keeps rewriting them, "
+    "so every listen is different. A 12-digit ETCH seed code makes the same groove on Game Boy, "
+    "Game Boy Advance and DS.",
+    "Dan Schwebel, known as Synth Centric, is an Australian beat maker, music producer, writer and educator.\n"
+    "ETCH, ETCH II and ETCH DS are Synth Centric releases.",
+    "Code: MIT licence.\n"
+    "Music, artwork and names: (c) Synth Centric.\n"
+    "CORROSION: from ETCH 2.5, MIT, unchanged.\n"
+    "Built with BlocksDS. Every sound is synthesised by the DS; there are no recorded samples.",
+};
+static uint8_t fl_about, ab_page;
+
+static void about_draw(void)
+{
+    int i;
+    char b[8];
+    gfx_rect(fb_bot, 0, TOP_Y, 256, 192 - TOP_Y, COL_BG);
+    gfx_text(fb_bot, 6, TOP_Y + 1, F_SMALL, COL_TEXT2, "ABOUT");
+    sprintf(b, "%d / %d", ab_page + 1, N_ABOUT);
+    gfx_text_r(fb_bot, 250, TOP_Y + 1, F_SMALL, COL_TEXT3, b);
+    gfx_text_scaled(fb_bot, 6, TOP_Y + 12, F_MAIN, 2, COL_TEXT, about_title[ab_page]);
+    gfx_wrap(fb_bot, 6, TOP_Y + 34, 244, F_MAIN, 10, COL_TEXT, about_text[ab_page]);
+    button(6, 162, 58, 24, "BACK", 0, 0, COL_ACCENT);
+    button(162, 162, 42, 24, "<", 0, 0, COL_ACCENT);
+    button(208, 162, 42, 24, ">", 0, 0, COL_ACCENT);
+    for (i = 0; i < N_ABOUT; i++)                      /* page dots */
+        gfx_disc(fb_bot, 104 + i * 10, 174, i == ab_page ? 2 : 1, i == ab_page ? COL_TEXT : COL_SURF3);
+}
+
 static void fl_say(uint16_t col, const char *m) { strncpy(fl_msg, m, 39); fl_msg[39] = 0; fl_msg_t = 180; fl_msg_col = col; }
 
 static void fl_refresh(void)
@@ -1053,8 +1091,9 @@ static void fl_refresh(void)
     fl_valid = 1;
 }
 
-static const char * const fl_btn_ds[4] = { "SAVE", "LOAD", "ERASE", "GB SAVES" };
-static const char * const fl_btn_gb[4] = { "IMPORT", "", "", "DS SAVES" };
+static const char * const fl_btn_ds[5] = { "SAVE", "LOAD", "ERASE", "GB", "ABOUT" };
+static const char * const fl_btn_gb[5] = { "IMPORT", "", "", "DS", "ABOUT" };
+#define FL_BP 49                /* button pitch: 5 x 45 + 4 x 4 */
 
 static void fl_draw(void)
 {
@@ -1065,6 +1104,7 @@ static void fl_draw(void)
         gfx_text_c(fb_bot, 128, 80, F_MAIN, COL_ACCENT, "NO SD CARD");
         gfx_text_c(fb_bot, 128, 94, F_SMALL, COL_TEXT2, "SAVES NEED A FLASH CART OR LOADER");
         gfx_text_c(fb_bot, 128, 102, F_SMALL, COL_TEXT2, "THAT DLDI-PATCHES HOMEBREW");
+        button(6 + 4 * FL_BP, FL_BTN, 45, 22, "ABOUT", 0, fl_area == 1 && fl_btn == 4, COL_ACCENT);
         return;
     }
     gfx_text(fb_bot, 6, TOP_Y + 1, F_SMALL, COL_TEXT2, fl_src ? "GAME BOY SAVES" : "SAVE SLOTS");
@@ -1089,13 +1129,12 @@ static void fl_draw(void)
         gfx_text(fb_bot, 129 + 6, FL_Y0 + 12, F_SMALL, COL_TEXT2, "32 KB .SAV TO THE PATH");
         gfx_text(fb_bot, 129 + 6, FL_Y0 + 20, F_SMALL, COL_TEXT2, "ABOVE. IMPORT IS READ ONLY.");
     }
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < 5; i++) {
         const char *nm = fl_src ? fl_btn_gb[i] : fl_btn_ds[i];
         int armed = fl_arm == i;
         if (!nm[0]) continue;
-        button(6 + i * 62, FL_BTN, 58, 22, nm, armed && (fl_arm_t & 8), fl_area == 1 && fl_btn == i,
-               i == 2 ? COL_RED : COL_ACCENT);
-        if (armed && !(fl_arm_t & 8)) gfx_rframe(fb_bot, 6 + i * 62, FL_BTN, 58, 22, i == 2 ? COL_RED : COL_ACCENT);
+        button(6 + i * FL_BP, FL_BTN, 45, 22, nm, armed && (fl_arm_t & 8), fl_area == 1 && fl_btn == i, COL_ACCENT);
+        if (armed && !(fl_arm_t & 8)) gfx_rframe(fb_bot, 6 + i * FL_BP, FL_BTN, 45, 22, COL_ACCENT);
     }
     if (fl_msg_t) gfx_text(fb_bot, 6, 180, F_MAIN, fl_msg_col, fl_msg);
 }
@@ -1104,6 +1143,7 @@ static void fl_action(int b)
 {
     char m[40];
     uint8_t s = fl_sel;
+    if (b == 4) { fl_about = 1; ab_page = 0; fl_arm = 0xFF; return; }
     if (!app_card) return;
     if (b == 3) { fl_src ^= 1; fl_sel = 0; fl_arm = 0xFF; fl_refresh(); return; }
     if (fl_src) {                                      /* IMPORT */
@@ -1144,6 +1184,11 @@ static void fl_frame(void)
 {
     uint32_t sig;
     int i;
+    if (fl_about) {
+        sig = 0xA0000000u | ab_page;
+        if (sig != fl_sig) { about_draw(); fl_sig = sig; }
+        return;
+    }
     if (!fl_valid) fl_refresh();
     if (fl_arm_t && !--fl_arm_t) fl_arm = 0xFF;
     if (fl_msg_t) fl_msg_t--;
@@ -1157,11 +1202,19 @@ static void fl_touch(int phase)
 {
     int n = fl_src ? GB_SLOTS : DS_SLOTS;
     if (phase != 0) return;
+    if (fl_about) {
+        if (t_y >= 160) {
+            if (t_x < 66) { fl_about = 0; fl_sig = 0xFFFFFFFF; }
+            else if (t_x >= 160 && t_x < 206 && ab_page > 0) ab_page--;
+            else if (t_x >= 206 && ab_page + 1 < N_ABOUT) ab_page++;
+        } else if (ab_page + 1 < N_ABOUT) ab_page++;      /* tap the page: next */
+        return;
+    }
     if (t_y >= FL_Y0 - 1 && t_y < FL_Y0 + 8 * FL_P) {
         int i = (t_x >= 6 + FL_W + 1 ? 8 : 0) + clampi((t_y - FL_Y0 + 1) / FL_P, 0, 7);
         if (i < n) { if (i != fl_sel) fl_arm = 0xFF; fl_sel = (uint8_t)i; fl_area = 0; }
     } else if (t_y >= FL_BTN - 2 && t_y < FL_BTN + 24) {
-        int b = clampi((t_x - 6) / 62, 0, 3);
+        int b = clampi((t_x - 6) / FL_BP, 0, 4);
         fl_area = 1; fl_btn = (uint8_t)b;
         fl_action(b);
     }
@@ -1170,6 +1223,12 @@ static void fl_touch(int phase)
 static void fl_keys(uint32_t down, uint32_t held, uint32_t rep)
 {
     int n = fl_src ? GB_SLOTS : DS_SLOTS;
+    if (fl_about) {
+        if (down & KEY_B) { fl_about = 0; fl_sig = 0xFFFFFFFF; }
+        if (((rep & KEY_RIGHT) || (down & KEY_A)) && ab_page + 1 < N_ABOUT) ab_page++;
+        if ((rep & KEY_LEFT) && ab_page > 0) ab_page--;
+        return;
+    }
     if (held & KEY_A) {
         if (down & KEY_A) {
             if (fl_area == 1) fl_action(fl_btn);
@@ -1185,7 +1244,7 @@ static void fl_keys(uint32_t down, uint32_t held, uint32_t rep)
         if ((rep & KEY_LEFT) && fl_sel >= 8) { fl_sel -= 8; fl_arm = 0xFF; }
     } else {
         if ((rep & KEY_LEFT) && fl_btn > 0) fl_btn--;
-        if ((rep & KEY_RIGHT) && fl_btn < 3) fl_btn++;
+        if ((rep & KEY_RIGHT) && fl_btn < 4) fl_btn++;
         if (rep & KEY_UP) fl_area = 0;
     }
 }
@@ -1200,7 +1259,7 @@ static void enter_tab(void)
     case TAB_XY: xy_draw_static(); break;
     case TAB_PANEL: panel_draw_static(); break;
     case TAB_KEYS: kb_sig = 0xFFFFFFFF; break;
-    case TAB_SONG: sg_sig = 0xFFFFFFFF; fl_sig = 0xFFFFFFFF; fl_valid = 0; break;
+    case TAB_SONG: sg_sig = 0xFFFFFFFF; fl_sig = 0xFFFFFFFF; fl_valid = 0; fl_about = 0; break;
     default: gen_sig = 0xFFFFFFFF; break;
     }
 }
@@ -1219,7 +1278,6 @@ static void tab_touch(int phase)
 
 void ui_init(void)
 {
-    gfx_init();
     keysSetRepeat(15, 4);
     need_full = 1;
 }

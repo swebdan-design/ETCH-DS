@@ -6,6 +6,7 @@
  */
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 #include "gfx.h"
 #include "dsp_tables.h"
 
@@ -242,4 +243,50 @@ int gfx_textf(uint16_t *fb, int x, int y, int font, uint16_t c, const char *fmt,
     vsnprintf(b, sizeof b, fmt, a);
     va_end(a);
     return gfx_text(fb, x, y, font, c, b);
+}
+
+int gfx_text_scaled(uint16_t *fb, int x, int y, int font, int scale, uint16_t c, const char *s)
+{
+    int h = FONT_H(font);
+    for (; *s; s++) {
+        const uint8_t *rows;
+        int w = glyph(font, *s, &rows), i, j;
+        for (j = 0; j < h; j++)
+            for (i = 0; i < w; i++)
+                if (rows[j] & (0x80 >> i)) gfx_rect(fb, x + i * scale, y + j * scale, scale, scale, c);
+        x += (w + 1) * scale;
+    }
+    return x;
+}
+
+int gfx_wrap(uint16_t *fb, int x, int y, int w, int font, int line_h, uint16_t c, const char *s)
+{
+    char line[64], word[40];
+    int ln = 0;
+    line[0] = 0;
+    while (*s) {
+        int n = 0;
+        while (*s == ' ') s++;
+        if (*s == '\n') {                         /* paragraph break */
+            if (ln) { gfx_text(fb, x, y, font, c, line); y += line_h; line[0] = 0; ln = 0; }
+            y += line_h / 2;
+            s++;
+            continue;
+        }
+        while (*s && *s != ' ' && *s != '\n' && n < 39) word[n++] = *s++;
+        word[n] = 0;
+        if (!n) continue;
+        if (ln) {
+            char test[104];
+            snprintf(test, sizeof test, "%s %s", line, word);
+            if (gfx_text_w(font, test) > w) {
+                gfx_text(fb, x, y, font, c, line);
+                y += line_h;
+                strcpy(line, word);
+            } else strcpy(line, test);
+        } else strcpy(line, word);
+        ln = (int)strlen(line);
+    }
+    if (ln) { gfx_text(fb, x, y, font, c, line); y += line_h; }
+    return y;
 }

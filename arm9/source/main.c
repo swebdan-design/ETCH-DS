@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "app.h"
+#include "gfx.h"
 #include "audio.h"
 #include "storage.h"
 
@@ -118,11 +119,11 @@ int main(int argc, char **argv)
 {
     (void)argc; (void)argv;
 
+    gfx_init();
+    title_show();                       /* the name is up before anything else */
     audio_engine_init();                /* also starts the TIMER2/3 counter */
     foundry_build();
     shared_init();
-    ui_init();
-    top_init();
 
     irqSet(IRQ_IPC_SYNC, render_irq);
     REG_IPC_SYNC = IPC_SYNC_IRQ_ENABLE;
@@ -132,6 +133,17 @@ int main(int argc, char **argv)
     while (!fifoCheckValue32(FIFO_ETCH_INIT)) swiWaitForVBlank();
     fifoGetValue32(FIFO_ETCH_INIT);
     app_card = storage_init();                /* audio is already running */
+
+    /* Press START, hear music: the title waits for START (or a tap); the
+     * moment of the press seeds the living song, and playback starts. */
+    {
+        uint16_t e = title_run();
+        ui_entropy = e;
+        evo_seed(e);
+        app_send(CMD(CMD_START, e));
+    }
+    ui_init();
+    top_init();
 
     while (1) {
         uint32_t down, held;

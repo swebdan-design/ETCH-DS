@@ -19,6 +19,12 @@ The milestone report is [`docs/MILESTONE1_REPORT.md`](docs/MILESTONE1_REPORT.md)
 
 ## The screens
 
+![Title and ABOUT](docs/images/title_about.png)
+
+**Title.** As on ETCH and ETCH II, it opens on the name, "by Synth Centric", and PRESS START. START (or a tap) goes straight into the music, and the moment you press it seeds the living song.
+
+**ABOUT.** FILE → ABOUT has four pages: ETCH DS, generative music, Synth Centric (the bio) and credits and licences. Use LEFT/RIGHT or the arrows to turn the pages, and B or BACK to return.
+
 **Top (always):** the machine's face plate. It shows the song, the seed code and an amber 7-segment tempo. The pattern sits in a recessed display: the bass line as pitch, plus ETCH's four drum lanes. Steps that CORROSION has just changed glow acid green and fade. Below the pattern are a row of step LEDs, the mode, the generation and the bars until the next evolution, an oscilloscope, and the per-stage CPU meter.
 
 **Bottom tabs:**
@@ -30,7 +36,7 @@ The milestone report is [`docs/MILESTONE1_REPORT.md`](docs/MILESTONE1_REPORT.md)
 | PANEL | Knobs for ACID (wave, cutoff, resonance, env mod, decay, accent, slide, drive, drive amount, filter mode, level), BPM, FX drive, delay, comb, and CPU TEST. Patch cables come later. |
 | KEYS | Two octaves of the GEN key and scale only, so there are no wrong notes. ACCENT and SLIDE latches (with SLIDE on, dragging between keys glides). OCT −/+. REC: while playing, a key writes into the step that is sounding; while stopped, it writes step by step, and B + A writes a rest. A held key takes the 303 from the sequencer. |
 | GEN | CORROSION's settings on faders, the seed code on a 7-segment pad (tap above or below a digit), GEN ALL / GEN BASS / DRUMS, and the mutation dial. |
-| SONG / FILE | Tap the SONG tab again for FILE. **SONG:** the 32 patterns: tap one to play it from the next bar, or with SONG on, to put it in the selected chain slot. ETCH's 16-slot chain with repeats: tap a slot to select it, tap it again to jump there. SONG on/off, PAT −/+, REP −/+, and COPY (the playing pattern into the next empty one). **FILE:** 16 save slots on the SD card; LOAD, ERASE and overwrites ask twice. Loading jumps to LIVE and plays. The GB button lists ETCH Game Boy saves to import (read only). |
+| SONG / FILE | Tap the SONG tab again for FILE. **SONG:** the 32 patterns: tap one to play it from the next bar, or with SONG on, to put it in the selected chain slot. ETCH's 16-slot chain with repeats: tap a slot to select it, tap it again to jump there. SONG on/off, PAT −/+, REP −/+, and COPY (the playing pattern into the next empty one). **FILE:** 16 save slots on the SD card, plus ABOUT; LOAD, ERASE and overwrites ask twice. Loading jumps to LIVE and plays. The GB button lists ETCH Game Boy saves to import (read only). |
 
 ## Controls
 

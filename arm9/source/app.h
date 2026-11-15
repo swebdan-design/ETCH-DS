@@ -53,6 +53,12 @@ uint32_t audio_scope(int16_t *out, uint32_t n);
 void demo_load(project_t *p);        /* portable: also used by the host tests */
 void demo_import_sound(const project_t *p);
 
+#define ETCH_DS_VERSION "0.3"
+
+/* title.c: the opening screen; returns the entropy of the START press */
+void     title_show(void);          /* draw it (first thing at boot) */
+uint16_t title_run(void);
+
 /* ui.c (bottom screen) and scr_top.c */
 void ui_init(void);
 void ui_frame(uint32_t keys_down, uint32_t keys_held);
