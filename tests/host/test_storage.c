@@ -8,6 +8,9 @@
 #include <stddef.h>
 #include "storage.h"
 #include "fixtures/etch_gba_expected.h"
+#ifndef GBA_FIXTURE                     /* where the real ETCH II save lives (ETCH 3DS overrides it) */
+#define GBA_FIXTURE "../../tests/host/fixtures/etch_gba.sav"
+#endif
 #include "corrosion.h"
 
 static int fails = 0, checks = 0;
@@ -154,7 +157,7 @@ int main(void)
         FILE *f;
         uint8_t sav[32768];
         int i, chain_ok = 1;
-        storage_gba_path = "../../tests/host/fixtures/etch_gba.sav";
+        storage_gba_path = GBA_FIXTURE;
         CHECK(storage_gba_status(0, NULL) == SLOT_EMPTY, "GBA: empty slot");
         CHECK(storage_gba_status(1, name) == SLOT_OK && !memcmp(name, x_name, 10), "GBA: slot 2 found, named");
         memset(&q, 0x5A, sizeof q);                              /* the sound to keep */
