@@ -16,7 +16,7 @@ ETCH DS turns a Nintendo DS into an acid machine that writes its own music. It h
 - **CORROSION**, the composer from ETCH for the Game Boy, byte for byte. It writes a bass line and drums from a seed, and keeps rewriting them while they play.
 - **The touch screen** for performing: an XY pad, a two-octave keyboard, knobs and pads.
 
-ETCH DS is part of a series: **ETCH** (Game Boy), **ETCH II** (Game Boy Advance), **ETCH DS** and **ETCH 3DS**. They share one composer, one set of controls and one look. A 12-digit seed code makes the same groove on all of them, and ETCH DS can import songs saved on ETCH and ETCH II.
+Every song can be shared as a 12-digit seed code, and ETCH DS can also import songs saved with ETCH on the Game Boy and ETCH II on the Game Boy Advance (see FILE).
 
 ## 2. Quick start
 

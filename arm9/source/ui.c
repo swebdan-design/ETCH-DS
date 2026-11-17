@@ -1344,22 +1344,23 @@ static uint16_t fl_msg_col;
 static uint32_t fl_sig = 0xFFFFFFFF;
 
 
-/* ---- ABOUT (from FILE), as on ETCH and ETCH II ------------------------------ */
+/* ---- ABOUT (from FILE): four pages, standalone ------------------------------- */
 #define N_ABOUT 4
 static const char * const about_title[N_ABOUT] = { "ETCH DS", "GENERATIVE MUSIC", "SYNTH CENTRIC", "CREDITS" };
 static const char * const about_text[N_ABOUT] = {
     "A generative acid machine for the Nintendo DS, by Synth Centric. Version " ETCH_DS_VERSION ".\n"
-    "The sequel to ETCH for the Game Boy. The same composer, CORROSION, now plays a real-time acid bass voice, "
-    "six drum lanes and an effects chain, with the touch screen for performing.",
+    "Its composer, CORROSION, writes a bass line and drums and keeps rewriting them while they play. "
+    "A real-time acid bass voice, six synthesised drum lanes and an effects chain play them, "
+    "with the touch screen for performing.",
     "Generative music is made by a system of rules and chance instead of being fixed note by note.\n"
     "CORROSION composes a bass line and drums from a seed. In DRIFT or CORRODE it keeps rewriting them, "
-    "so every listen is different. A 12-digit ETCH seed code makes the same groove on Game Boy, "
-    "Game Boy Advance and DS.",
+    "so every listen is different. A 12-digit seed code always makes the same groove: "
+    "share the code to share the song.",
     "Dan Schwebel, known as Synth Centric, is an Australian beat maker, music producer, writer and educator.\n"
-    "ETCH, ETCH II and ETCH DS are Synth Centric releases.",
+    "ETCH DS is a Synth Centric release.",
     "Code: MIT licence.\n"
     "Music, artwork and names: (c) Synth Centric.\n"
-    "CORROSION: from ETCH 2.5, MIT, unchanged.\n"
+    "CORROSION: MIT licence.\n"
     "Built with BlocksDS. Every sound is synthesised by the DS; there are no recorded samples.",
 };
 static uint8_t fl_about, ab_page;
