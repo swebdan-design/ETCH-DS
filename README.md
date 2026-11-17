@@ -74,6 +74,19 @@ Projects live in `/etch_ds/etch_ds.sav` on the SD card. The file holds 16 fixed 
 
 A damaged or half-written slot is reported and never loaded. To import ETCH Game Boy projects, copy the cartridge's 32 KB `.sav` to `/etch_ds/etch_gb.sav`. To import ETCH II (Game Boy Advance) projects, copy its 32 KB `.sav` to `/etch_ds/etch_gba.sav`: the song name, generator, all 32 patterns, tempo, chain and drum voicing come across exactly (checked with CRC-32). ETCH II's synth patches and extension tracks have no place on the DS, so your current DS sound is kept. Saving needs a flash cart or loader that DLDI-patches homebrew, which most do automatically.
 
+## Release (version 0.4)
+
+The `release/` folder is the delivery:
+
+| File | What it is |
+|---|---|
+| `etch_ds.nds` | the ROM |
+| `ETCH_DS_Manual.pdf` (and `.md`) | the user manual |
+| `ETCH_DS_source.zip` | the source at this release |
+| `SHA256SUMS.txt` | checksums of the files above |
+
+`tools/check_series_controls.py` runs the ROM in melonDS, checks the series controls (7 checks) and screenshots every tab.
+
 ## Building
 
 Requirements: [BlocksDS](https://blocksds.skylyrac.net/) (tested with 1.25.0 / Wonderful GCC 16.2). The simplest route is BlocksDS's Docker image:
