@@ -70,7 +70,7 @@ A paraphonic or polyphonic synth (4–8 voices):
 
 On a New 3DS it becomes fully polyphonic, with a filter per voice.
 
-**Seed codes.** OXIDE's settings add digits to the end of the 12-digit code, for example `0F1C-9009-5870-H2A3`. The first 12 digits stay ETCH's, so old codes keep making the same bass and drums, and harmony is added only when the extra digits are present.
+**Seed codes.** OXIDE is seeded from the fourth group of the 16-digit code that ETCH II already uses for its expansion seed (`SERIES_SPEC.md` 5), for example `0F1C-9009-5870-0A1D`. There is one code format for the whole series: the first 12 digits stay ETCH's, so old codes keep making the same bass and drums, and harmony is added only when the extra four digits are present.
 
 ## 4. More new things
 
