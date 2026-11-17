@@ -1347,21 +1347,16 @@ static uint32_t fl_sig = 0xFFFFFFFF;
 /* ---- ABOUT (from FILE): four pages, standalone ------------------------------- */
 #define N_ABOUT 4
 static const char * const about_title[N_ABOUT] = { "ETCH DS", "GENERATIVE MUSIC", "SYNTH CENTRIC", "CREDITS" };
+/* the series' ABOUT texts: the same on every ETCH */
 static const char * const about_text[N_ABOUT] = {
-    "A generative acid machine for the Nintendo DS, by Synth Centric. Version " ETCH_DS_VERSION ".\n"
-    "Its composer, CORROSION, writes a bass line and drums and keeps rewriting them while they play. "
-    "A real-time acid bass voice, six synthesised drum lanes and an effects chain play them, "
-    "with the touch screen for performing.",
-    "Generative music is made by a system of rules and chance instead of being fixed note by note.\n"
-    "CORROSION composes a bass line and drums from a seed. In DRIFT or CORRODE it keeps rewriting them, "
-    "so every listen is different. A 12-digit seed code always makes the same groove: "
-    "share the code to share the song.",
+    "A generative acid machine by Synth Centric. Version " ETCH_DS_VERSION ".\n"
+    "Its composer, CORROSION, writes the music and keeps rewriting it. An acid bass voice, six drum lanes and an effects chain play it on the Nintendo DS, with the touch screen for performing.",
+    "Generative music is made by rules and chance. CORROSION composes from a seed and keeps rewriting, so every listen is different.\n"
+    "A seed code always makes the same groove: share it to share the song.",
     "Dan Schwebel, known as Synth Centric, is an Australian beat maker, music producer, writer and educator.\n"
     "ETCH DS is a Synth Centric release.",
-    "Code: MIT licence.\n"
-    "Music, artwork and names: (c) Synth Centric.\n"
-    "CORROSION: MIT licence.\n"
-    "Built with BlocksDS. Every sound is synthesised by the DS; there are no recorded samples.",
+    "Code and CORROSION: MIT licence. Music, artwork, names: (c) Synth Centric.\n"
+    "Built with BlocksDS. Every sound is synthesised: no samples.",
 };
 static uint8_t fl_about, ab_page;
 
