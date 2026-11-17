@@ -13,7 +13,7 @@ This is **milestone 1, "It squelches"**. It proves the sound before any interfac
 * **Sequencer** on the ARM7: ETCH's step rules and ETCH II's fixed swing clock, sample-accurate on a 32-sample grid.
 * **XY pad** on the bottom screen: X = cutoff, Y = resonance.
 
-![ETCH DS: LIVE, XY, PANEL, KEYS, GEN and SONG](docs/images/screens.png)
+![ETCH DS: LIVE, XY, SYNTH, KEYS, GEN and SONG](docs/images/screens.png)
 
 The milestone report is [`docs/MILESTONE1_REPORT.md`](docs/MILESTONE1_REPORT.md), the design is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and parked ideas are in [`docs/IDEAS.md`](docs/IDEAS.md).
 
@@ -33,12 +33,14 @@ The milestone report is [`docs/MILESTONE1_REPORT.md`](docs/MILESTONE1_REPORT.md)
 |---|---|
 | LIVE | The pattern, editable. Bass: tap an empty step to place the last note, tap a note to rest it, and drag up or down anywhere in a step to move it by scale steps (one per 6 px). The note's name is shown beside the lane. Tap the A/S strip under a step to cycle accent and slide. Tap or swipe drum cells. Tap a row name to mute it. The pads are FILL, REGEN, EVOLVE and UNDO. |
 | XY | X sets cutoff and Y sets resonance, with a fading trail and 7-segment readouts. |
-| PANEL / DRUM | Tap PANEL again for DRUM. **PANEL:** knobs for ACID (wave, cutoff, resonance, env mod, decay, accent, slide, drive, drive amount, filter mode, level), BPM, FX drive, delay, comb, and CPU TEST. Patch cables come later. **DRUM:** FOUNDRY's drum synth. Pick a lane (tapping it plays it) and shape the sound in the kit slot the playing pattern uses: KIT, MODEL (kick, snare, clap, rim, hat, metal, blip, ring, crush), PITCH, PITCH END, SWEEP, DECAY, NOISE, DRIVE, TUNE and LEVEL, with a waveform view. Each edit re-synthesises the drum while the song plays. Knobs a model doesn't use are dimmed, and RESET restores ETCH's preset. |
+| SYNTH / DRUM | Tap SYNTH again for DRUM. **SYNTH:** knobs for ACID (wave, cutoff, resonance, env mod, decay, accent, slide, drive, drive amount, filter mode, level), BPM, FX drive, delay, comb, and CPU TEST. Patch cables come later. **DRUM:** FOUNDRY's drum synth. Pick a lane (tapping it plays it) and shape the sound in the kit slot the playing pattern uses: KIT, MODEL (kick, snare, clap, rim, hat, metal, blip, ring, crush), PITCH, PITCH END, SWEEP, DECAY, NOISE, DRIVE, TUNE and LEVEL, with a waveform view. Each edit re-synthesises the drum while the song plays. Knobs a model doesn't use are dimmed, and RESET restores ETCH's preset. |
 | KEYS | Two octaves of the GEN key and scale only, so there are no wrong notes. ACCENT and SLIDE latches (with SLIDE on, dragging between keys glides). OCT −/+. REC: while playing, a key writes into the step that is sounding; while stopped, it writes step by step, and B + A writes a rest. A held key takes the 303 from the sequencer. |
 | GEN | CORROSION's settings on faders, the seed code on a 7-segment pad (tap above or below a digit), GEN ALL / GEN BASS / DRUMS, and the mutation dial. |
-| SONG / FILE | Tap the SONG tab again for FILE. **SONG:** the 32 patterns: tap one to play it from the next bar, or with SONG on, to put it in the selected chain slot. ETCH's 16-slot chain with repeats: tap a slot to select it, tap it again to jump there. SONG on/off, PAT −/+, REP −/+, and COPY (the playing pattern into the next empty one). **FILE:** 16 save slots on the SD card, plus ABOUT; LOAD, ERASE and overwrites ask twice. Loading jumps to LIVE and plays. The GB button lists ETCH Game Boy saves to import (read only). |
+| SONG / FILE | Tap the SONG tab again for FILE. **SONG:** the 32 patterns: tap one to play it from the next bar, or with SONG on, to put it in the selected chain slot. ETCH's 16-slot chain with repeats: tap a slot to select it, tap it again to jump there. SONG on/off, PAT −/+, REP −/+, and COPY (the playing pattern into the next empty one). **FILE:** 16 save slots on the SD card, plus ABOUT; LOAD, ERASE and overwrites ask twice. Loading jumps to LIVE and plays. The GB button lists ETCH Game Boy saves to import (read only); press it again (GBA) for ETCH II saves. |
 
 ## Controls
+
+The controls and the look follow the ETCH series spec ([`docs/SERIES_SPEC.md`](docs/SERIES_SPEC.md)), shared by ETCH, ETCH II, ETCH DS and ETCH 3DS. The accent colour **#F45423** marks whatever is happening now: the playhead, the cursor, the current tab, lit pads and the steps CORROSION has just changed.
 
 | | |
 |---|---|
@@ -46,11 +48,15 @@ The milestone report is [`docs/MILESTONE1_REPORT.md`](docs/MILESTONE1_REPORT.md)
 | SELECT + LEFT / RIGHT | previous / next tab (or tap the tab bar) |
 | D-pad | move the cursor on the current tab |
 | A | place or toggle (on LIVE: a note, a hit, a mute, a pad) |
-| A + D-pad | change the value under the cursor (LIVE bass: UP/DOWN steps the pitch in the scale, RIGHT toggles accent, LEFT toggles slide) |
+| A + D-pad | change the value under the cursor (LIVE bass: LEFT/RIGHT a semitone, UP/DOWN an octave, as on every ETCH) |
+| X / Y | on a LIVE bass note: accent / slide on or off |
 | B + A | delete |
 | SELECT + A | evolve at the next bar |
 | SELECT + B | undo the last generation |
-| hold R | latched fill: a fresh variation every bar until you let go |
+| SELECT + UP / DOWN | queue the next / previous pattern (song mode turns off) |
+| SELECT + START | latched fill on / off (a fresh variation every bar) |
+| B (tap, on LIVE) | latched fill on / off |
+| hold R | fill while held: a fresh variation every bar until you let go |
 | hold L while dragging | temporary move: it springs back when you let go |
 | knob drags | up or right turns a knob up; the whole range takes about 90 px |
 
@@ -66,7 +72,7 @@ Projects live in `/etch_ds/etch_ds.sav` on the SD card. The file holds 16 fixed 
 4. write the header, with the magic last
 5. read everything back
 
-A damaged or half-written slot is reported and never loaded. To import ETCH Game Boy projects, copy the cartridge's 32 KB `.sav` to `/etch_ds/etch_gb.sav`. Saving needs a flash cart or loader that DLDI-patches homebrew, which most do automatically.
+A damaged or half-written slot is reported and never loaded. To import ETCH Game Boy projects, copy the cartridge's 32 KB `.sav` to `/etch_ds/etch_gb.sav`. To import ETCH II (Game Boy Advance) projects, copy its 32 KB `.sav` to `/etch_ds/etch_gba.sav`: the song name, generator, all 32 patterns, tempo, chain and drum voicing come across exactly (checked with CRC-32). ETCH II's synth patches and extension tracks have no place on the DS, so your current DS sound is kept. Saving needs a flash cart or loader that DLDI-patches homebrew, which most do automatically.
 
 ## Building
 
