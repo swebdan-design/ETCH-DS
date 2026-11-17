@@ -153,7 +153,7 @@ int main(int argc, char **argv)
         held = keysHeld();
         if (down) ui_entropy = (uint16_t)((ui_entropy * 31u) ^ hw_noise() ^ down);
 
-        if (down & KEY_START) {
+        if ((down & KEY_START) && !(held & KEY_SELECT)) {     /* SELECT+START is the fill (ui.c) */
             if (!SH->playing) {
                 uint16_t e = (uint16_t)(ui_entropy ^ hw_noise());
                 evo_seed(e);                        /* the moment START was pressed */

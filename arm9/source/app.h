@@ -35,6 +35,7 @@ uint8_t  app_pattern_empty(uint8_t pat);
 uint8_t  app_save_slot(uint8_t slot);
 uint8_t  app_load_slot(uint8_t slot);
 uint8_t  app_import_gb(uint8_t slot);
+uint8_t  app_import_gba(uint8_t slot);       /* ETCH II (GBA) saves */
 extern uint8_t app_card;             /* SD card ready */
 void     app_generate(uint8_t what);
 uint16_t app_regen(uint8_t what);

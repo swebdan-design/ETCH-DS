@@ -24,11 +24,12 @@
 #include "storage.h"
 
 enum { TAB_LIVE, TAB_XY, TAB_PANEL, TAB_KEYS, TAB_GEN, TAB_SONG, TAB_COUNT };
-static const char * const tab_names[TAB_COUNT] = { "LIVE", "XY", "PANEL", "KEYS", "GEN", "SONG" };
+static const char * const tab_names[TAB_COUNT] = { "LIVE", "XY", "SYNTH", "KEYS", "GEN", "SONG" };
 #define TAB_X0 6
 #define TAB_W  41
 #define TOP_Y  26
 static uint8_t tab = TAB_LIVE, need_full = 1, sg_page;   /* sg_page 1: FILE */
+static uint8_t r_fill, b_alone;                            /* the fill R started; B tapped alone */
 static uint8_t pn_page;                                   /* pn_page 1: DRUM */
 uint8_t ui_stress;
 static uint32_t frame;
@@ -40,13 +41,13 @@ static int t_x, t_y, t_sx, t_sy;
 static const char * const notes12[12] = { "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-" };
 static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 
-/* a button: rounded, flat; lit = accent fill with dark text */
+/* a button: rounded, flat; lit = accent fill with black text (SERIES_SPEC.md 4.2) */
 static void button(int x, int y, int w, int h, const char *label, int lit, int sel, uint16_t litcol)
 {
     gfx_rect(fb_bot, x, y, w, h, COL_BG);
     gfx_rrect(fb_bot, x, y, w, h, lit ? litcol : COL_SURF2);
     if (sel) gfx_rframe(fb_bot, x, y, w, h, lit ? COL_TEXT : COL_ACCENT);
-    gfx_text_c(fb_bot, x + w / 2, y + (h - 7) / 2, F_MAIN, lit ? COL_BG : COL_TEXT, label);
+    gfx_text_c(fb_bot, x + w / 2, y + (h - 7) / 2, F_MAIN, lit && litcol != COL_ACCENT ? COL_BG : COL_TEXT, label);
 }
 
 /* Knob drags: the whole range fits in about 90 px of travel, and dragging
@@ -169,12 +170,12 @@ static void live_labels(void)
 {
     int l, sel = lv_col < 0;
     gfx_rect(fb_bot, 0, BASS_T + 18, LX0 - 2, PAD_Y - BASS_T - 22, COL_BG);   /* below the note readout */
-    gfx_text(fb_bot, 6, BASS_T + 21, F_SMALL, (SH->proj.mutes & 1) ? COL_TEXT3 : (sel && lv_row == 0) ? COL_ACCENT : COL_TEXT2, "BASS");
+    gfx_text(fb_bot, 6, BASS_T + 21, F_SMALL, (SH->proj.mutes & 1) ? COL_TEXT3 : (sel && lv_row == 0) ? COL_TEXT : COL_TEXT2, "BASS");
     if (SH->proj.mutes & 1) gfx_text(fb_bot, 6, BASS_T + 29, F_SMALL, COL_RED, "MUTE");
     gfx_text(fb_bot, 6, STRIP_Y, F_SMALL, COL_TEXT3, "A/S");
     for (l = 0; l < 4; l++) {
         int m = (SH->proj.mutes >> (l + 1)) & 1;
-        gfx_text(fb_bot, 6, LANE_Y(l) + 4, F_SMALL, m ? COL_TEXT3 : (sel && lv_row == l + 1) ? COL_ACCENT : COL_TEXT2, lane_names[l]);
+        gfx_text(fb_bot, 6, LANE_Y(l) + 4, F_SMALL, m ? COL_TEXT3 : (sel && lv_row == l + 1) ? COL_TEXT : COL_TEXT2, lane_names[l]);
         if (m) gfx_disc(fb_bot, LX0 - 6, LANE_Y(l) + 6, 1, COL_RED);
     }
 }
@@ -315,14 +316,18 @@ static void live_touch(int phase)          /* 0 down, 1 drag, 2 up */
 static void live_keys(uint32_t down, uint32_t held, uint32_t rep)
 {
     const pattern_t *p = &SH->proj.pat[SH->cur];
+    if (lv_row == 0 && lv_col >= 0 && (p->flags[lv_col] & STEP_TYPE_MASK) == STEP_NOTE) {
+        uint8_t f = p->flags[lv_col], n = p->note[lv_col];
+        if (down & KEY_X) app_set_bass((uint8_t)lv_col, n, f ^ STEP_ACCENT);   /* the DS's extra buttons: */
+        if (down & KEY_Y) app_set_bass((uint8_t)lv_col, n, f ^ STEP_SLIDE);    /* X accent, Y slide       */
+    }
     if (held & KEY_A) {
         if (lv_row == 0 && lv_col >= 0) {
             uint8_t f = p->flags[lv_col], n = p->note[lv_col];
             if ((f & STEP_TYPE_MASK) == STEP_NOTE) {
-                if (rep & KEY_UP) { n = corr_scale_step(n, 1, &SH->proj.gen); app_set_bass((uint8_t)lv_col, n, f); last_note = n; }
-                if (rep & KEY_DOWN) { n = corr_scale_step(n, -1, &SH->proj.gen); app_set_bass((uint8_t)lv_col, n, f); last_note = n; }
-                if (down & KEY_RIGHT) app_set_bass((uint8_t)lv_col, n, f ^ STEP_ACCENT);
-                if (down & KEY_LEFT) app_set_bass((uint8_t)lv_col, n, f ^ STEP_SLIDE);
+                /* SERIES_SPEC.md 2.2: A+</> a semitone, A+^v an octave (as ETCH) */
+                int d = (rep & KEY_RIGHT) ? 1 : (rep & KEY_LEFT) ? -1 : (rep & KEY_UP) ? 12 : (rep & KEY_DOWN) ? -12 : 0;
+                if (d) { n = (uint8_t)clampi(n + d, 0, NOTE_MAX); app_set_bass((uint8_t)lv_col, n, f); last_note = n; }
             }
         }
         if (down & KEY_A) {                                    /* A places or toggles */
@@ -525,7 +530,7 @@ static void knob_draw(int k)
     gfx_rrect(fb_bot, x, y, KN_W - 3, KN_H - 3, sel ? COL_SURF : COL_BG);
     draw_knob(cx, y + 12, 10, knob_get(k), knob_lo[k], knob_hi[k], sel);
     knob_value(k, val);
-    gfx_text_c(fb_bot, cx, y + 25, F_SMALL, sel ? COL_ACCENT : COL_TEXT2, knob_names[k]);
+    gfx_text_c(fb_bot, cx, y + 25, F_SMALL, sel ? COL_TEXT : COL_TEXT2, knob_names[k]);
     gfx_text_c(fb_bot, cx, y + 32, F_SMALL, COL_TEXT, val);
 }
 
@@ -704,7 +709,7 @@ static void dr_knob(int k)
             for (i = x; i < x + DR_W - 3; i++) fb_bot[j * 256 + i] = gfx_mix(fb_bot[j * 256 + i], COL_BG, 170);
     }
     dr_value(k, val);
-    gfx_text_c(fb_bot, cx, y + 25, F_SMALL, !used ? COL_TEXT3 : sel ? COL_ACCENT : COL_TEXT2, dk_names[k]);
+    gfx_text_c(fb_bot, cx, y + 25, F_SMALL, !used ? COL_TEXT3 : sel ? COL_TEXT : COL_TEXT2, dk_names[k]);
     gfx_text_c(fb_bot, cx, y + 32, F_SMALL, used ? COL_TEXT : COL_TEXT3, val);
 }
 
@@ -748,7 +753,7 @@ static void dr_draw_static(void)
     if (!hz_tab[0]) dr_tables();
     memset(dr_sig, 0xFF, sizeof dr_sig);
     dr_head_sig = dr_wave_sig = 0xFFFFFFFF;
-    gfx_text_c(fb_bot, 128, 178, F_SMALL, COL_TEXT3, "TAP A LANE TO HEAR IT   TAP PANEL AGAIN FOR SYNTH");
+    gfx_text_c(fb_bot, 128, 178, F_SMALL, COL_TEXT3, "TAP A LANE TO HEAR IT   TAP DRUM AGAIN FOR SYNTH");
 }
 
 static void dr_frame(void)
@@ -914,7 +919,7 @@ static void gen_draw(void)
         default: sprintf(v, "%d", val); break;
         }
         if (sel) gfx_rrect(fb_bot, 4, y, 248, GR_H - 1, COL_SURF);
-        gfx_text(fb_bot, 8, y + 3, F_SMALL, sel ? COL_ACCENT : COL_TEXT2, gen_names[i]);
+        gfx_text(fb_bot, 8, y + 3, F_SMALL, sel ? COL_TEXT : COL_TEXT2, gen_names[i]);
         gfx_text(fb_bot, GV_X, y + 2, F_MAIN, COL_TEXT, v);
         w = (val * (SL_W - 6)) / gen_max[i];
         gfx_rrect(fb_bot, SL_X0, y + 4, SL_W, 3, COL_SURF2);
@@ -924,7 +929,7 @@ static void gen_draw(void)
     /* seed code: tap the upper half of a digit to raise it, the lower half to lower it */
     corr_code_encode(g, code);
     gfx_rrect(fb_bot, 6, CODE_Y, 244, 23, COL_SURF);
-    gfx_text(fb_bot, 12, CODE_Y + 6, F_SMALL, gen_item == GI_CODE ? COL_ACCENT : COL_TEXT2, "SEED");
+    gfx_text(fb_bot, 12, CODE_Y + 6, F_SMALL, gen_item == GI_CODE ? COL_TEXT : COL_TEXT2, "SEED");
     gfx_text(fb_bot, 12, CODE_Y + 13, F_SMALL, COL_TEXT3, "+/-");
     for (i = 0; i < 12; i++) {
         int x = code_x(i), sel = gen_item == GI_CODE && gen_sub == i;
@@ -937,7 +942,7 @@ static void gen_draw(void)
     }
     gfx_rrect(fb_bot, 174, GB_Y, 76, 30, gen_item == GI_MUTATE ? COL_SURF : COL_BG);
     draw_knob(190, GB_Y + 15, 11, g->mutation, 0, 15, gen_item == GI_MUTATE);
-    gfx_text(fb_bot, 208, GB_Y + 6, F_SMALL, gen_item == GI_MUTATE ? COL_ACCENT : COL_TEXT2, "MUTATE");
+    gfx_text(fb_bot, 208, GB_Y + 6, F_SMALL, gen_item == GI_MUTATE ? COL_TEXT : COL_TEXT2, "MUTATE");
     gfx_textf(fb_bot, 208, GB_Y + 14, F_MAIN, COL_TEXT, "%d", g->mutation);
 }
 
@@ -1199,7 +1204,7 @@ static void sg_draw(void)
         if (i == q && !now) gfx_rframe(fb_bot, x, y, CELL_W, 13, blink ? COL_ACCENT : COL_ACC_DIM);
         if (sg_area == 0 && sg_cur == i) gfx_rframe(fb_bot, x, y, CELL_W, 13, now ? COL_TEXT : COL_TEXT);
         sprintf(b, "%02d", i);
-        gfx_text_c(fb_bot, x + CELL_W / 2, y + 3, F_MAIN, now ? COL_BG : empty ? COL_TEXT3 : COL_TEXT, b);
+        gfx_text_c(fb_bot, x + CELL_W / 2, y + 3, F_MAIN, now ? COL_TEXT : empty ? COL_TEXT3 : COL_TEXT, b);
     }
     gfx_text(fb_bot, 6, CHAIN_Y0 - 9, F_SMALL, COL_TEXT2, "CHAIN");
     gfx_text(fb_bot, 34, CHAIN_Y0 - 9, F_SMALL, ch->song ? COL_TEXT : COL_TEXT3, ch->song ? "SONG ON" : "SONG OFF");
@@ -1212,9 +1217,9 @@ static void sg_draw(void)
         if (sg_sel == i) gfx_rframe(fb_bot, x, y, CELL_W, 13, sg_area == 1 ? COL_TEXT : COL_TEXT3);
         if (ch->pat[i] < NUM_PATTERNS) {
             sprintf(b, "%02d", ch->pat[i]);
-            gfx_text(fb_bot, x + 2, y + 3, F_MAIN, playing ? COL_BG : COL_TEXT, b);
+            gfx_text(fb_bot, x + 2, y + 3, F_MAIN, COL_TEXT, b);
             sprintf(b, "X%d", ch->rep[i]);
-            gfx_text_r(fb_bot, x + CELL_W - 2, y + 5, F_SMALL, playing ? COL_BG : COL_TEXT3, b);
+            gfx_text_r(fb_bot, x + CELL_W - 2, y + 5, F_SMALL, playing ? COL_TEXT : COL_TEXT3, b);
         } else gfx_text_c(fb_bot, x + CELL_W / 2, y + 4, F_SMALL, COL_TEXT3, "END");
     }
     for (i = 0; i < 6; i++)
@@ -1330,6 +1335,7 @@ static void sg_keys(uint32_t down, uint32_t held, uint32_t rep)
 #define FL_W   121
 #define FL_BTN 150
 static uint8_t fl_src, fl_sel, fl_area, fl_btn, fl_arm = 0xFF, fl_arm_t, fl_valid;
+#define FL_N() (fl_src == 2 ? GBA_SLOTS : fl_src ? GB_SLOTS : DS_SLOTS)   /* 0 DS, 1 ETCH (GB), 2 ETCH II (GBA) */
 static uint8_t fl_status[DS_SLOTS], fl_last = SAVE_NONE;
 static char fl_names[DS_SLOTS][PROJECT_NAME_LEN + 1];
 static char fl_msg[40];
@@ -1379,35 +1385,36 @@ static void fl_say(uint16_t col, const char *m) { strncpy(fl_msg, m, 39); fl_msg
 
 static void fl_refresh(void)
 {
-    int i, n = fl_src ? GB_SLOTS : DS_SLOTS;
+    int i, n = FL_N();
     memset(fl_status, 0, sizeof fl_status);
     if (app_card)
         for (i = 0; i < n; i++) {
             memset(fl_names[i], 0, sizeof fl_names[i]);
-            fl_status[i] = fl_src ? storage_gb_status((uint8_t)i, fl_names[i]) : storage_slot_status((uint8_t)i, fl_names[i]);
+            fl_status[i] = fl_src == 2 ? storage_gba_status((uint8_t)i, fl_names[i]) : fl_src ? storage_gb_status((uint8_t)i, fl_names[i]) : storage_slot_status((uint8_t)i, fl_names[i]);
         }
     fl_last = (app_card && !fl_src) ? storage_last_slot() : SAVE_NONE;
     fl_valid = 1;
 }
 
 static const char * const fl_btn_ds[5] = { "SAVE", "LOAD", "ERASE", "GB", "ABOUT" };
-static const char * const fl_btn_gb[5] = { "IMPORT", "", "", "DS", "ABOUT" };
+static const char * const fl_btn_gb[5] = { "IMPORT", "", "", "GBA", "ABOUT" };
+static const char * const fl_btn_gba[5] = { "IMPORT", "", "", "DS", "ABOUT" };
 #define FL_BP 49                /* button pitch: 5 x 45 + 4 x 4 */
 
 static void fl_draw(void)
 {
-    int i, n = fl_src ? GB_SLOTS : DS_SLOTS;
+    int i, n = FL_N();
     char b[16];
     gfx_rect(fb_bot, 0, TOP_Y, 256, 192 - TOP_Y, COL_BG);
     if (!app_card) {
-        gfx_text_c(fb_bot, 128, 80, F_MAIN, COL_ACCENT, "NO SD CARD");
+        gfx_text_c(fb_bot, 128, 80, F_MAIN, COL_TEXT, "NO SD CARD");
         gfx_text_c(fb_bot, 128, 94, F_SMALL, COL_TEXT2, "SAVES NEED A FLASH CART OR LOADER");
         gfx_text_c(fb_bot, 128, 102, F_SMALL, COL_TEXT2, "THAT DLDI-PATCHES HOMEBREW");
         button(6 + 4 * FL_BP, FL_BTN, 45, 22, "ABOUT", 0, fl_area == 1 && fl_btn == 4, COL_ACCENT);
         return;
     }
-    gfx_text(fb_bot, 6, TOP_Y + 1, F_SMALL, COL_TEXT2, fl_src ? "GAME BOY SAVES" : "SAVE SLOTS");
-    gfx_text_r(fb_bot, 250, TOP_Y + 1, F_SMALL, COL_TEXT3, fl_src ? "/ETCH_DS/ETCH_GB.SAV" : "/ETCH_DS/ETCH_DS.SAV");
+    gfx_text(fb_bot, 6, TOP_Y + 1, F_SMALL, COL_TEXT2, fl_src == 2 ? "ETCH II (GBA) SAVES" : fl_src ? "GAME BOY SAVES" : "SAVE SLOTS");
+    gfx_text_r(fb_bot, 250, TOP_Y + 1, F_SMALL, COL_TEXT3, fl_src == 2 ? "/ETCH_DS/ETCH_GBA.SAV" : fl_src ? "/ETCH_DS/ETCH_GB.SAV" : "/ETCH_DS/ETCH_DS.SAV");
     for (i = 0; i < n; i++) {
         int x = 6 + (i >> 3) * (FL_W + 2), y = FL_Y0 + (i & 7) * FL_P, sel = fl_area == 0 && fl_sel == i;
         int ok = fl_status[i] == SLOT_OK;
@@ -1429,13 +1436,16 @@ static void fl_draw(void)
         gfx_text(fb_bot, 129 + 6, FL_Y0 + 20, F_SMALL, COL_TEXT2, "ABOVE. IMPORT IS READ ONLY.");
     }
     for (i = 0; i < 5; i++) {
-        const char *nm = fl_src ? fl_btn_gb[i] : fl_btn_ds[i];
+        const char *nm = fl_src == 2 ? fl_btn_gba[i] : fl_src ? fl_btn_gb[i] : fl_btn_ds[i];
         int armed = fl_arm == i;
         if (!nm[0]) continue;
         button(6 + i * FL_BP, FL_BTN, 45, 22, nm, armed && (fl_arm_t & 8), fl_area == 1 && fl_btn == i, COL_ACCENT);
         if (armed && !(fl_arm_t & 8)) gfx_rframe(fb_bot, 6 + i * FL_BP, FL_BTN, 45, 22, COL_ACCENT);
     }
-    if (fl_msg_t) gfx_text(fb_bot, 6, 180, F_MAIN, fl_msg_col, fl_msg);
+    if (fl_msg_t) {                                   /* messages: black text, an accent mark for news */
+        if (fl_msg_col == COL_EVOLVE) gfx_rect(fb_bot, 2, 180, 2, 7, COL_ACCENT);
+        gfx_text(fb_bot, 6, 180, F_MAIN, COL_TEXT, fl_msg);
+    }
 }
 
 static void fl_action(int b)
@@ -1444,13 +1454,15 @@ static void fl_action(int b)
     uint8_t s = fl_sel;
     if (b == 4) { fl_about = 1; ab_page = 0; fl_arm = 0xFF; return; }
     if (!app_card) return;
-    if (b == 3) { fl_src ^= 1; fl_sel = 0; fl_arm = 0xFF; fl_refresh(); return; }
+    if (b == 3) { fl_src = (uint8_t)((fl_src + 1) % 3); fl_sel = 0; fl_arm = 0xFF; fl_refresh(); return; }
     if (fl_src) {                                      /* IMPORT */
         if (b != 0) return;
         if (fl_status[s] != SLOT_OK) { fl_say(COL_RED, "NOTHING TO IMPORT THERE"); return; }
         if (fl_arm != 0) { fl_arm = 0; fl_arm_t = 120; fl_say(COL_ACCENT, "REPLACES YOUR SONG. PRESS AGAIN"); return; }
         fl_arm = 0xFF;
-        if (app_import_gb(s)) { fl_say(COL_EVOLVE, "IMPORTED FROM GAME BOY"); tab = TAB_LIVE; sg_page = 0; need_full = 1; }
+        if (fl_src == 2 ? app_import_gba(s) : app_import_gb(s)) {
+            fl_say(COL_EVOLVE, fl_src == 2 ? "IMPORTED FROM ETCH II" : "IMPORTED FROM GAME BOY"); tab = TAB_LIVE; sg_page = 0; need_full = 1;
+        }
         else fl_say(COL_RED, "IMPORT FAILED");
         return;
     }
@@ -1499,7 +1511,7 @@ static void fl_frame(void)
 
 static void fl_touch(int phase)
 {
-    int n = fl_src ? GB_SLOTS : DS_SLOTS;
+    int n = FL_N();
     if (phase != 0) return;
     if (fl_about) {
         if (t_y >= 160) {
@@ -1521,7 +1533,7 @@ static void fl_touch(int phase)
 
 static void fl_keys(uint32_t down, uint32_t held, uint32_t rep)
 {
-    int n = fl_src ? GB_SLOTS : DS_SLOTS;
+    int n = FL_N();
     if (fl_about) {
         if (down & KEY_B) { fl_about = 0; fl_sig = 0xFFFFFFFF; }
         if (((rep & KEY_RIGHT) || (down & KEY_A)) && ab_page + 1 < N_ABOUT) ab_page++;
@@ -1606,6 +1618,12 @@ void ui_frame(uint32_t down, uint32_t held)
         }
         if (down & KEY_A) app_evolve();
         if (down & KEY_B) app_undo();
+        if (down & KEY_START) app_fill_latch(!SH->fill_hold);     /* SERIES_SPEC.md 2.1: latched fill */
+        if (down & (KEY_UP | KEY_DOWN)) {                          /* queue the next / previous pattern */
+            uint8_t base = SH->queued != 0xFF ? SH->queued : SH->cur;
+            app_queue((uint8_t)((base + ((down & KEY_UP) ? 1 : NUM_PATTERNS - 1)) % NUM_PATTERNS));
+            if (SH->proj.chain.song) app_song(0);
+        }
     } else {
         switch (tab) {
         case TAB_LIVE: live_keys(down, held, rep); break;
@@ -1616,8 +1634,14 @@ void ui_frame(uint32_t down, uint32_t held)
         default: gen_keys(down, held, rep); break;
         }
     }
-    if (down & KEY_R) app_fill_latch(1);              /* hold R: latched fill */
-    if (up & KEY_R) app_fill_latch(0);
+    /* hold R: fill while held; it lets go only of the fill it started */
+    if ((down & KEY_R) && !SH->fill_hold) { app_fill_latch(1); r_fill = 1; }
+    if ((up & KEY_R) && r_fill) { r_fill = 0; if (SH->fill_hold) app_fill_latch(0); }
+    /* B tapped on its own on LIVE: the latched fill on / off (as ETCH and ETCH II) */
+    if (down & KEY_B) b_alone = 1;
+    if ((held & KEY_B) && (down & ~KEY_B)) b_alone = 0;
+    if ((up & KEY_B) && b_alone && tab == TAB_LIVE && !(held & KEY_SELECT)) app_fill_latch(!SH->fill_hold);
+    if (up & KEY_B) b_alone = 0;
 
     /* ---- touch: one point, down / drag / up --------------------------- */
     if (held & KEY_TOUCH) {

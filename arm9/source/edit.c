@@ -222,6 +222,15 @@ uint8_t app_load_slot(uint8_t slot)
     return 1;
 }
 
+uint8_t app_import_gba(uint8_t slot)
+{
+    static project_t p;
+    memcpy(&p, (const void *)&SH->proj, sizeof p);      /* keep the sound: ETCH II's patches don't map */
+    if (!storage_gba_load(slot, &p)) return 0;
+    apply_project(&p, NULL);
+    return 1;
+}
+
 uint8_t app_import_gb(uint8_t slot)
 {
     static project_t p;

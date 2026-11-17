@@ -175,7 +175,7 @@ static void draw_stats(void)
     if (SH->fill) {                                    /* inverted tag inside the block */
         int x = 6 + 49 + 22;
         gfx_rrect(fb_top, x, STAT_Y + 10, 21, 8, COL_ACCENT);
-        gfx_text_c(fb_top, x + 11, STAT_Y + 11, F_SMALL, COL_BG, SH->fill_hold ? "HOLD" : "FILL");
+        gfx_text_c(fb_top, x + 11, STAT_Y + 11, F_SMALL, COL_TEXT, SH->fill_hold ? "HOLD" : "FILL");
     }
     sprintf(b, "%03d", pr->pat[SH->cur].gen);
     stat(2, "GENERATION", b, COL_TEXT);

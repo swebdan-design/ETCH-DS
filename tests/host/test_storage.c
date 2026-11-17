@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stddef.h>
 #include "storage.h"
+#include "fixtures/etch_gba_expected.h"
 #include "corrosion.h"
 
 static int fails = 0, checks = 0;
@@ -145,6 +146,36 @@ int main(void)
               !memcmp(&q, &v1, PROJECT_V1_SIZE), "GB v1 gets drum defaults");
         CHECK(storage_gb_status(1, NULL) == SLOT_EMPTY, "GB empty");
         CHECK(storage_gb_status(6, NULL) == SLOT_BAD && !storage_gb_load(6, &q), "GB damaged refused");
+    }
+
+    /* ---- ETCH II (Game Boy Advance) import: a real save made by ETCH II 2.0 ---- */
+    {
+        static project_t q;
+        FILE *f;
+        uint8_t sav[32768];
+        int i, chain_ok = 1;
+        storage_gba_path = "../../tests/host/fixtures/etch_gba.sav";
+        CHECK(storage_gba_status(0, NULL) == SLOT_EMPTY, "GBA: empty slot");
+        CHECK(storage_gba_status(1, name) == SLOT_OK && !memcmp(name, x_name, 10), "GBA: slot 2 found, named");
+        memset(&q, 0x5A, sizeof q);                              /* the sound to keep */
+        CHECK(storage_gba_load(1, &q), "GBA: import");
+        CHECK(!memcmp(q.name, x_name, 10), "GBA: name");
+        CHECK(!memcmp(&q.gen, x_gen, sizeof q.gen), "GBA: generator settings exact (12 bytes)");
+        CHECK(!memcmp(q.pat, x_pat, sizeof q.pat), "GBA: all 32 patterns exact");
+        CHECK(q.synth.bpm == x_bpm_swing_gate_tune[0] && q.synth.swing == x_bpm_swing_gate_tune[1] &&
+              q.synth.gate == x_bpm_swing_gate_tune[2] && q.synth.tune == x_bpm_swing_gate_tune[3], "GBA: tempo, swing, gate, tune");
+        CHECK(!memcmp(q.drum_tune, x_drums, 4) && !memcmp(q.drum_decay, x_drums + 4, 4) && !memcmp(q.drum_level, x_drums + 8, 4), "GBA: drum voicing");
+        for (i = 0; i < CHAIN_LEN; i++)
+            if (q.chain.pat[i] != x_song[i] || q.chain.rep[i] != (x_song[32 + i] < 1 ? 1 : x_song[32 + i] > 8 ? 8 : x_song[32 + i])) chain_ok = 0;
+        CHECK(chain_ok && q.chain.song == x_song[64], "GBA: chain (first 16 of 32, repeats 1..8)");
+        CHECK(q.mutes == 0x19, "GBA: mutes map (bass + both hat lanes), got %02x", q.mutes);
+        CHECK(q.start_pattern == x_start[0], "GBA: start pattern");
+        CHECK(q.synth.cutoff == 0x5A && q.synth.res == 0x5A, "GBA: the DS sound is kept (patches don't map)");
+        f = fopen(storage_gba_path, "rb"); CHECK(f && fread(sav, 1, sizeof sav, f) == sizeof sav, "GBA: fixture read"); if (f) fclose(f);
+        sav[1 * 8192 + 32 + 700] ^= 0x5A;                       /* corrupt one byte */
+        storage_gba_path = "../../build/host/etch_gba_bad.sav";
+        f = fopen(storage_gba_path, "wb"); fwrite(sav, 1, sizeof sav, f); fclose(f);
+        CHECK(storage_gba_status(1, NULL) == SLOT_BAD && !storage_gba_load(1, &q), "GBA: damaged slot refused (CRC-32)");
     }
     printf("test_storage: %d checks, %d failures\n", checks, fails);
     return fails ? 1 : 0;

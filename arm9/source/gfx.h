@@ -4,11 +4,11 @@
  * all text is drawn into it with two proportional pixel fonts, so every
  * label sits exactly where the layout puts it (no 8x8 character grid).
  *
- * Design system: flat dark surfaces, 1 px borders, 2 px rounded corners,
+ * Design system (SERIES_SPEC.md 4): flat surfaces, 1 px borders, 2 px rounded corners,
 * 6 px outer margin, 4 px gaps.  Small grey captions over white values;
- * black on white, minimal: hierarchy by weight alone; black is what is
- * active (lit buttons invert to white on black), and steps CORROSION just
- * changed are washed in grey, fading.
+ * black on white, minimal: hierarchy by weight alone; the accent #F45423 is
+ * what is active, happening now (lit buttons fill with it, text stays black),
+ * and steps CORROSION just changed are washed in the accent, fading.
  */
 #ifndef ETCH_DS_GFX_H
 #define ETCH_DS_GFX_H
@@ -25,15 +25,15 @@
 #define COL_TEXT    C(2, 2, 2)      /* values: black            */
 #define COL_TEXT2   C(13, 13, 13)   /* captions                 */
 #define COL_TEXT3   C(21, 21, 21)   /* disabled / hints         */
-#define COL_ACCENT  C(0, 0, 0)      /* active: black            */
+#define COL_ACCENT  C(30, 10, 4)    /* active: the series accent #F45423 (SERIES_SPEC.md 4.2); never for text */
 #define COL_ACC_DIM C(18, 18, 18)
 #define COL_ACC_LO  C(25, 25, 25)
 #define COL_NOTE    C(11, 11, 11)   /* notes and hits           */
 #define COL_HOT     C(0, 0, 0)      /* accented notes, kick     */
-#define COL_EVOLVE  C(0, 0, 0)      /* CORROSION's changes      */
-#define COL_GLOW    C(21, 21, 21)   /* evolved column wash      */
+#define COL_EVOLVE  C(30, 10, 4)    /* CORROSION's changes: the accent, fading */
+#define COL_GLOW    C(31, 27, 25)   /* evolved column wash: ACC_TINT */
 #define COL_RED     C(0, 0, 0)      /* warnings (by inversion)  */
-#define COL_PLAY    C(25, 25, 25)   /* playhead column          */
+#define COL_PLAY    C(31, 27, 25)   /* playhead column: ACC_TINT */
 #define COL_BEAT    C(28, 28, 28)   /* every 4th step           */
 
 enum { F_SMALL, F_MAIN };           /* 5 px caps, 7 px caps    */

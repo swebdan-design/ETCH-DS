@@ -13,6 +13,7 @@
 
 const char *storage_path = "/etch_ds/etch_ds.sav";
 const char *storage_gb_path = "/etch_ds/etch_gb.sav";
+const char *storage_gba_path = "/etch_ds/etch_gba.sav";
 
 #define HDR      16
 #define META_OFF (DS_SLOTS * DS_SLOT_SIZE)
@@ -199,5 +200,75 @@ uint8_t storage_gb_load(uint8_t slot, project_t *p)
     memset(p, 0, sizeof *p);
     memcpy(p, buf, size);
     if (size < sizeof(project_t)) project_drum_defaults(p);       /* ETCH v1 slot */
+    return 1;
+}
+
+/* ---- ETCH II (Game Boy Advance) saves (read only; SERIES_SPEC.md 5) ---------
+ * The .sav is the 32 KB SRAM: 4 slots of 8 KB.  Each slot is a 32-byte header
+ * "ETC2" | version 1 | album | size LE16 | CRC-32 LE32 | name ..., then ETCH
+ * II's project (7 230 bytes).  Its core is ETCH's: the generator, the 32
+ * 64-byte patterns, tempo and drum voicing carry over exactly; ETCH II's
+ * synth patches and extension tracks have no place on the DS and are left. */
+#define GBA_HDR   32
+#define GBA_SIZE  7230u
+enum {                                     /* offsets in ETCH II's project2_t */
+    E2_NAME = 0, E2_BPM = 11, E2_SWING = 12, E2_GATE = 13, E2_TUNE = 14, E2_MUTES = 15,
+    E2_START = 16, E2_GEN = 18, E2_SONG_PAT = 30, E2_SONG_REP = 62, E2_SONG_ON = 94,
+    E2_DTUNE = 298, E2_DDECAY = 302, E2_DLEVEL = 306, E2_PAT = 318
+};
+
+static uint32_t crc32(const uint8_t *p, uint32_t n)
+{
+    uint32_t c = 0xFFFFFFFFu, i;
+    int k;
+    for (i = 0; i < n; i++) {
+        c ^= p[i];
+        for (k = 0; k < 8; k++) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1)));
+    }
+    return ~c;
+}
+
+static uint8_t gba_check(uint8_t s)
+{
+    uint8_t h[GBA_HDR];
+    uint32_t off = (uint32_t)s * 8192u, size;
+    if (s >= GBA_SLOTS || !rd(storage_gba_path, off, h, GBA_HDR)) return SLOT_EMPTY;
+    if (h[0] != 'E' || h[1] != 'T' || h[2] != 'C' || h[3] != '2') return SLOT_EMPTY;
+    size = (uint32_t)(h[6] | (h[7] << 8));
+    if (h[4] != 1 || size != GBA_SIZE) return SLOT_BAD;
+    if (!rd(storage_gba_path, off + GBA_HDR, buf, size)) return SLOT_BAD;
+    if (crc32(buf, size) != ((uint32_t)h[8] | ((uint32_t)h[9] << 8) | ((uint32_t)h[10] << 16) | ((uint32_t)h[11] << 24))) return SLOT_BAD;
+    return SLOT_OK;
+}
+
+uint8_t storage_gba_status(uint8_t slot, char *name10)
+{
+    uint8_t r = gba_check(slot);
+    if (r == SLOT_OK && name10) memcpy(name10, buf + E2_NAME, PROJECT_NAME_LEN);
+    return r;
+}
+
+/* p arrives holding the sound to keep (ETCH II's synth patches don't map) */
+uint8_t storage_gba_load(uint8_t slot, project_t *p)
+{
+    uint8_t i, m;
+    if (gba_check(slot) != SLOT_OK) return 0;
+    memcpy(p->name, buf + E2_NAME, PROJECT_NAME_LEN);
+    p->synth.bpm = buf[E2_BPM]; p->synth.swing = buf[E2_SWING];
+    p->synth.gate = buf[E2_GATE]; p->synth.tune = buf[E2_TUNE];
+    memcpy(&p->gen, buf + E2_GEN, sizeof(gen_t));
+    for (i = 0; i < CHAIN_LEN; i++) {      /* ETCH II's chain is 32 long; ETCH's 16 */
+        uint8_t r = buf[E2_SONG_REP + i];
+        p->chain.pat[i] = buf[E2_SONG_PAT + i];
+        p->chain.rep[i] = r < 1 ? 1 : r > 8 ? 8 : r;
+    }
+    p->chain.song = buf[E2_SONG_ON];
+    m = buf[E2_MUTES];                     /* ETCH II: a bit per track (0 bass, 4 kick, 5 perc, 6 hats) */
+    p->mutes = (uint8_t)((m & 1) | ((m >> 3) & 2) | ((m >> 3) & 4) | ((m & 0x40) ? 0x18 : 0));
+    p->start_pattern = buf[E2_START] < NUM_PATTERNS ? buf[E2_START] : 0;
+    memcpy(p->pat, buf + E2_PAT, sizeof p->pat);
+    memcpy(p->drum_tune, buf + E2_DTUNE, NUM_LANES);
+    memcpy(p->drum_decay, buf + E2_DDECAY, NUM_LANES);
+    memcpy(p->drum_level, buf + E2_DLEVEL, NUM_LANES);
     return 1;
 }

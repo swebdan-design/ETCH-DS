@@ -13,7 +13,8 @@
  * and never loaded.
  *
  * ETCH Game Boy saves (a 32 KB .sav of the cartridge SRAM) can be read and
- * imported, read only: /etch_ds/etch_gb.sav.
+ * imported, read only: /etch_ds/etch_gb.sav; ETCH II (Game Boy Advance)
+ * projects from /etch_ds/etch_gba.sav.
  */
 #ifndef ETCH_DS_STORAGE_H
 #define ETCH_DS_STORAGE_H
@@ -25,6 +26,7 @@
 #define DS_SLOT_SIZE    16384u
 #define DS_SAVE_VERSION 2              /* v1 slots (no drum designs) still load */
 #define GB_SLOTS        8
+#define GBA_SLOTS       4
 
 #define SLOT_EMPTY 0
 #define SLOT_OK    1
@@ -42,7 +44,7 @@ typedef struct {
 } ds_ext_t;
 
 /* paths (the host tests point these elsewhere) */
-extern const char *storage_path, *storage_gb_path;
+extern const char *storage_path, *storage_gb_path, *storage_gba_path;
 
 uint16_t etch_fletcher16(const uint8_t *p, uint32_t n);   /* ETCH's checksum */
 uint8_t storage_init(void);                                 /* 1 = card ready */
@@ -53,4 +55,6 @@ uint8_t storage_erase(uint8_t slot);
 uint8_t storage_last_slot(void);
 uint8_t storage_gb_status(uint8_t slot, char *name10);
 uint8_t storage_gb_load(uint8_t slot, project_t *p);
+uint8_t storage_gba_status(uint8_t slot, char *name10);   /* ETCH II (GBA), read only */
+uint8_t storage_gba_load(uint8_t slot, project_t *p);
 #endif
